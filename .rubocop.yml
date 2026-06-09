@@ -1,0 +1,58 @@
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 3.0
+
+Style/StringLiterals:
+  Enabled: true
+  EnforcedStyle: double_quotes
+
+Style/StringLiteralsInInterpolation:
+  Enabled: true
+  EnforcedStyle: double_quotes
+
+Layout/LineLength:
+  Max: 120
+
+Style/Documentation:
+  Enabled: false
+
+# The projection layer is a flat list of small, single-purpose extraction
+# methods; per-method these are simple, so the aggregate-class metrics are noise.
+Metrics/ClassLength:
+  Enabled: false
+
+Metrics/ModuleLength:
+  Enabled: false
+
+# Spec files describe-block nesting + fixtures.
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+
+# Dev deps live in the gemspec (matches the atlas_rb convention for this org's
+# gems) rather than the Gemfile.
+Gemspec/DevelopmentDependencies:
+  Enabled: false
+
+# MFA-required is set at publish time by the maintainer's rubygems account;
+# mirror atlas_rb rather than hard-pinning it here.
+Gemspec/RequireMFA:
+  Enabled: false
+
+# The gem name has a hyphen, so its require-entry is lib/neu-mods.rb by
+# convention (matches `require "neu-mods"`); not snake_case-able.
+Naming/FileName:
+  Exclude:
+    - "lib/neu-mods.rb"
+
+# `%04X` hex tokens for building \uXXXX escapes read better unannotated.
+Style/FormatStringToken:
+  Enabled: false
+
+# `dv` (display value) mirrors the mods gem's own naming in the name-display port.
+Naming/MethodParameterName:
+  AllowedNames: [dv, np]
+
+# to_h is a flat 15-key projection hash (data, not logic).
+Metrics/MethodLength:
+  Max: 20

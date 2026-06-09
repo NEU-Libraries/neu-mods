@@ -39,6 +39,39 @@ module NEU
         node
       end
 
+      # The "editable creator" <name> nodes of a given @type ("personal" /
+      # "corporate") that the Advanced form manages: plain names (no authority
+      # markers) with a Creator role. The write-path counterpart to the
+      # editable_*_creators projections; everything else (authority-bearing or
+      # non-Creator) is curated and left untouched. Mirrors keyword_subjects.
+      def editable_creator_nodes(type)
+        doc.xpath("/mods:mods/mods:name[@type='#{type}']", NAMESPACE)
+           .select { |n| editable_creator_name?(n) }
+      end
+
+      # Build a plain personal-creator <name> node: namePart[@type=given]/[family]
+      # + a text roleTerm. No authority/valueURI (the editable set). `role` is
+      # parameterised (default "Creator") so a later role-selectable form is a
+      # non-breaking change.
+      def build_personal_name(given:, family:, role: "Creator")
+        name = build_node("name")
+        name["type"] = "personal"
+        name.add_child(name_part(given, "given")) unless given.to_s.strip.empty?
+        name.add_child(name_part(family, "family")) unless family.to_s.strip.empty?
+        name.add_child(role_node(role))
+        name
+      end
+
+      # Build a plain corporate-creator <name> node: a single namePart + a text
+      # roleTerm. No authority/valueURI.
+      def build_corporate_name(name:, role: "Creator")
+        node = build_node("name")
+        node["type"] = "corporate"
+        node.add_child(name_part(name)) unless name.to_s.strip.empty?
+        node.add_child(role_node(role))
+        node
+      end
+
       private
 
       def keyword_subject?(subject)
@@ -46,6 +79,28 @@ module NEU
 
         topics = subject.element_children
         topics.any? && topics.all? { |c| c.name == "topic" }
+      end
+
+      # A name is "editable" (depositor-managed) when it carries no authority
+      # markers and resolves to a Creator role. Shared by editable_creator_nodes
+      # (write/select) and the editable_*_creators projections (read).
+      def editable_creator_name?(node)
+        %w[authority authorityURI valueURI].none? { |attr| node[attr] } &&
+          name_role(node) == "Creator"
+      end
+
+      def name_part(text, type = nil)
+        np = build_node("namePart", text.to_s.strip)
+        np["type"] = type if type
+        np
+      end
+
+      def role_node(role)
+        role_el = build_node("role")
+        term = build_node("roleTerm", role)
+        term["type"] = "text"
+        role_el.add_child(term)
+        role_el
       end
     end
   end

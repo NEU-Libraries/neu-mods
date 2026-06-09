@@ -84,6 +84,28 @@ module NEU
         end
       end
 
+      # Editable (depositor-managed) creators: the plain names (no authority
+      # markers) with a Creator role, as STRUCTURED parts for form pre-fill --
+      # distinct from #names, which composes display strings for the access copy.
+      def editable_personal_creators
+        editable_creator_nodes("personal").map do |node|
+          { given: clean_part(joined_parts(node, "given")), family: clean_part(joined_parts(node, "family")) }
+        end
+      end
+
+      def editable_corporate_creators
+        editable_creator_nodes("corporate").map { |node| { name: clean_part(non_date_parts_joined(node)) } }
+      end
+
+      # Names the editable form does NOT manage (authority-bearing or non-Creator)
+      # -- for read-only display ("these exist; edit via the XML tab"). Composed
+      # display string + role, like #names but filtered to the preserved set.
+      def preserved_names
+        doc.xpath("/mods:mods/mods:name", NAMESPACE)
+           .reject { |node| editable_creator_name?(node) }
+           .map { |node| { name: name_display_value_w_date(node), role: name_role(node) } }
+      end
+
       # --- Scalars / simple arrays --------------------------------------------
 
       def languages
@@ -182,6 +204,12 @@ module NEU
 
         v = NEU::MODS.canonical_ws(str)
         v.empty? ? nil : v
+      end
+
+      # canonical_ws keeping "" for blank -- for structured form-field values
+      # (an empty given/family/org renders as an empty input, not a dropped key).
+      def clean_part(str)
+        NEU::MODS.canonical_ws(str)
       end
 
       def join_paragraphs(nodes)

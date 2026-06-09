@@ -44,7 +44,22 @@ NEU::MODS.compose_title(non_sort: "", title: "What's New",
 node = doc.primary_title_info.at_xpath("mods:title", NEU::MODS::NAMESPACE)
 node.content = "New Title" unless NEU::MODS.whitespace_equivalent?(node.text, "New Title")
 doc.to_xml
+
+# Editable creators (for an "advanced metadata" form): structured read,
+# node selection (for replace-on-save), and structure-aware build.
+doc.editable_personal_creators   # => [{ given:, family: }]  (plain, Creator role)
+doc.editable_corporate_creators  # => [{ name: }]
+doc.preserved_names              # => [{ name:, role: }]  (authority-bearing / non-Creator — read-only)
+doc.editable_creator_nodes("personal")            # => live <name> nodes to replace
+doc.build_personal_name(given: "Jenny", family: "Smith")      # => a plain personal <name> node
+doc.build_corporate_name(name: "Northeastern University")     # => a plain corporate <name> node
 ```
+
+The "editable creator" set is plain names — **no `@authority`/`@authorityURI`/
+`@valueURI`** — with a **Creator** role; everything else (authority-controlled or
+other-role names) is `preserved_names`, shown read-only. This mirrors the
+keyword-subject curated-vs-editable split. `build_*_name`'s `role:` defaults to
+`"Creator"` but is parameterised, so a later role-selectable form is non-breaking.
 
 ## Two normalizers, two jobs
 

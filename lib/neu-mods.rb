@@ -33,5 +33,10 @@ module NEU
     # Curator-freetext normalization for the access copy (see TextNormalizer).
     def normalize(str) = TextNormalizer.normalize(str)
     def normalize_paragraphs(str) = TextNormalizer.normalize_paragraphs(str)
+
+    # Pure display-title composition over a primary-title parts hash (see
+    # Projection.compose_title). Lets a caller that already holds the parts --
+    # e.g. Atlas's access-copy model -- compose the title without parsing XML.
+    def compose_title(parts) = Projection.compose_title(parts)
   end
 end

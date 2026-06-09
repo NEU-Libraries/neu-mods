@@ -31,13 +31,21 @@ module NEU
       # Composed display title (the former Atlas MODSDecoration#plain_title), driven
       # off the scoped primary title.
       def plain_title
-        p = title_parts
-        return "" if blank?(p[:title])
+        Projection.compose_title(title_parts)
+      end
 
-        "#{p[:non_sort]}#{p[:title]}" +
-          prefix(": ", p[:subtitle]) +
-          prefix(" - ", p[:part_name]) +
-          prefix(", ", p[:part_number])
+      # Pure title composition over a parts hash, factored out of #plain_title so
+      # callers that already hold the parts -- e.g. Atlas's access-copy model --
+      # can compose the display title WITHOUT re-parsing XML on the read path
+      # (reaching for Nokogiri in a decorator is the smell this avoids). Keys:
+      # :non_sort :title :subtitle :part_name :part_number (nil or "" for absent).
+      # Returns "" when there is no title. Exposed as NEU::MODS.compose_title.
+      def self.compose_title(parts)
+        return "" if parts[:title].to_s.strip.empty?
+
+        optional = { ": " => parts[:subtitle], " - " => parts[:part_name], ", " => parts[:part_number] }
+        suffix = optional.filter_map { |sep, val| "#{sep}#{val}" unless val.to_s.strip.empty? }.join
+        "#{parts[:non_sort]}#{parts[:title]}#{suffix}"
       end
 
       # --- Abstract / access ---------------------------------------------------
@@ -174,14 +182,6 @@ module NEU
 
         v = NEU::MODS.canonical_ws(str)
         v.empty? ? nil : v
-      end
-
-      def blank?(str)
-        str.nil? || str.strip.empty?
-      end
-
-      def prefix(sep, val)
-        blank?(val) ? "" : "#{sep}#{val}"
       end
 
       def join_paragraphs(nodes)

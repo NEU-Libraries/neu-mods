@@ -34,6 +34,12 @@ doc.topical_subjects # => ["Civil society", ...]   (every <topic>, for the acces
 doc.keywords       # => [...]   (only the editable attribute-free keyword subjects)
 doc.to_h           # => full projection, keyed to Atlas's Metadata::MODS attributes
 
+# Pure title composition (no document needed) — for callers that already hold
+# the parts (e.g. Atlas's access-copy model) and must not re-parse XML on read.
+NEU::MODS.compose_title(non_sort: "", title: "What's New",
+                        part_name: "How We Respond to Disaster", part_number: "Episode 1")
+# => "What's New - How We Respond to Disaster, Episode 1"   (== doc.plain_title)
+
 # Selectors (live nodes — for editing)
 node = doc.primary_title_info.at_xpath("mods:title", NEU::MODS::NAMESPACE)
 node.content = "New Title" unless NEU::MODS.whitespace_equivalent?(node.text, "New Title")

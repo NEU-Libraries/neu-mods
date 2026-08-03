@@ -26,6 +26,31 @@ RSpec.describe "NEU::MODS.compose_title" do
     expect(NEU::MODS.compose_title(non_sort: "A ", title: "Title")).to eq("A Title")
   end
 
+  # The separator is composed, not inherited. #child_text canonicalizes
+  # whitespace, so a nonSort authored as "The " reaches the composer as "The"
+  # and used to produce "TheHobbit". Both shapes must land on one space -- and
+  # an elided article must still take none.
+  describe "the nonSort separator" do
+    {
+      "inserts a space when canonicalization stripped it" => ["The", "Hobbit", "The Hobbit"],
+      "does not double the space when the caller kept it" => ["The ", "Hobbit", "The Hobbit"],
+      "binds an elided article with no space" => ["L'", "Étranger", "L'Étranger"],
+      "binds a curly-apostrophe elision too" => ["L’", "Étranger", "L’Étranger"],
+      "binds a hyphenated prefix" => ["D-", "Day", "D-Day"],
+      "omits the separator entirely when there is no nonSort" => ["", "Title", "Title"],
+      "treats a nil nonSort as absent" => [nil, "Title", "Title"]
+    }.each do |desc, (non_sort, title, expected)|
+      it desc do
+        expect(NEU::MODS.compose_title(non_sort: non_sort, title: title)).to eq(expected)
+      end
+    end
+
+    it "still composes the optional parts after the joined title" do
+      expect(NEU::MODS.compose_title(non_sort: "The", title: "Hobbit", subtitle: "There and Back Again"))
+        .to eq("The Hobbit: There and Back Again")
+    end
+  end
+
   it "returns \"\" when the title is absent, nil, or whitespace (regardless of other parts)" do
     aggregate_failures do
       expect(NEU::MODS.compose_title({})).to eq("")

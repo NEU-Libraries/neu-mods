@@ -45,7 +45,32 @@ module NEU
 
         optional = { ": " => parts[:subtitle], " - " => parts[:part_name], ", " => parts[:part_number] }
         suffix = optional.filter_map { |sep, val| "#{sep}#{val}" unless val.to_s.strip.empty? }.join
-        "#{parts[:non_sort]}#{parts[:title]}#{suffix}"
+        "#{join_non_sort(parts[:non_sort], parts[:title])}#{suffix}"
+      end
+
+      # Characters that bind a nonSort to the word after it. An elided article
+      # takes no space -- "L'Etranger", not "L' Etranger" -- and the same holds
+      # for a hyphenated prefix. U+2019 is the curly apostrophe, escaped rather
+      # than literal to keep lib/ pure ASCII (see the source-purity spec).
+      NON_SORT_BINDING = ["'", "\u2019", "-"].freeze
+
+      # MODS says a nonSort carries whatever separator it needs, so the historical
+      # composition simply concatenated. That only holds while the authored
+      # trailing space survives, and it does not: #child_text canonicalizes
+      # whitespace on read, so `<nonSort>The </nonSort>` arrives here as "The" and
+      # the title came out as "TheHobbit". Composing the separator instead makes
+      # the output right whether or not the source kept one -- which matters,
+      # because an invisible trailing space is not something a curator, a
+      # hand-edit or a third-party producer can be relied on to preserve.
+      #
+      # Callers that DO pass the space (Atlas's access-copy model) are unaffected:
+      # a nonSort already ending in whitespace is joined as-is.
+      def self.join_non_sort(non_sort, title)
+        prefix = non_sort.to_s
+        return title.to_s if prefix.empty?
+        return "#{prefix}#{title}" if prefix.end_with?(" ") || prefix.end_with?(*NON_SORT_BINDING)
+
+        "#{prefix} #{title}"
       end
 
       # --- Abstract / access ---------------------------------------------------

@@ -23,6 +23,41 @@ RSpec.describe NEU::MODS::Document do
     end
   end
 
+  # The access copy is cleaned; the editable parts are not. Both halves matter:
+  # Cerberus pre-fills its Metadata and Advanced forms from #title_parts and
+  # MODSMerge writes the posted value back into the preservation XML, so
+  # normalising there would rewrite the curator's characters on the next save.
+  describe "normalisation boundary between the access copy and the edit forms" do
+    # Built from codepoints so this spec file stays ASCII, like lib/.
+    def cp(*codepoints) = codepoints.pack("U*")
+
+    def doc_with_title(title)
+      described_class.parse(<<~XML)
+        <?xml version="1.0" encoding="UTF-8"?>
+        <mods:mods xmlns:mods="http://www.loc.gov/mods/v3">
+          <mods:titleInfo usage="primary">
+            <mods:title>#{title}</mods:title>
+          </mods:titleInfo>
+        </mods:mods>
+      XML
+    end
+
+    # A curly quote pair, a thin space, a bidi override and a Windows-1252 C1
+    # control -- what a paste out of Word actually carries.
+    let(:messy) do
+      "The #{cp(0x201C)}Boston#{cp(0x201D)}#{cp(0x2009)}Harbor#{cp(0x202E)}#{cp(0x0092)} Project"
+    end
+
+    it "cleans the title Atlas projects into JSON and Solr" do
+      expect(doc_with_title(messy).to_h[:main_title][:title])
+        .to eq('The "Boston" Harbor Project')
+    end
+
+    it "leaves the title the edit forms pre-fill from byte-faithful" do
+      expect(doc_with_title(messy).title_parts[:title]).to eq(messy)
+    end
+  end
+
   describe "the write-path contract (selectors return live, mutable nodes)" do
     # Reproduces how Cerberus's MODSMerge edits in place: locate the primary
     # title via the gem, mutate it, serialize — and prove curated structure

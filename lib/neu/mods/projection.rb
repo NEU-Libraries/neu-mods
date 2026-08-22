@@ -15,8 +15,15 @@ module NEU
     module Projection
       # --- Title ---------------------------------------------------------------
 
-      # Structured primary-title parts. nil for an absent part (the Cerberus form
-      # treats nil as "not present"); to_h coerces to "" for the Atlas main_title.
+      # Structured primary-title parts, byte-faithful to the document. nil for an
+      # absent part (the Cerberus form treats nil as "not present"); to_h coerces
+      # to "" for the Atlas main_title.
+      #
+      # Faithful on purpose: this is what Cerberus pre-fills its edit forms from
+      # (MODSFields for the Metadata tab, load_advanced! for the Advanced tab),
+      # and MODSMerge writes back whatever the form posts. Normalising here would
+      # rewrite the curator's characters in the preservation XML on the next save.
+      # #access_title_parts is the normalised surface.
       def title_parts
         ti = primary_title_info
         {
@@ -186,7 +193,7 @@ module NEU
       # names -- a drop-in source for `convert_xml_to_json`.
       def to_h
         {
-          main_title: title_parts.transform_values(&:to_s),
+          main_title: access_title_parts,
           names: names,
           languages: languages,
           date_created: date_created,
@@ -202,6 +209,14 @@ module NEU
           permanent_url: permanent_url,
           access_condition: access_condition
         }
+      end
+
+      # The title parts as the access copy wants them: normalised like the
+      # abstract, so a curly quote, an invisible format mark or a Windows-1252
+      # control cannot reach Solr or a display template. Titles and prose share
+      # one vocabulary -- the asymmetry where only prose was cleaned was the bug.
+      def access_title_parts
+        title_parts.transform_values { |value| NEU::MODS.normalize(value.to_s) }
       end
 
       private

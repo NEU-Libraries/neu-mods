@@ -29,6 +29,7 @@ doc = NEU::MODS::Document.parse(xml_string)
 # Projection (plain data)
 doc.plain_title    # => "What's New - How We Respond to Disaster, Episode 1"
 doc.title_parts    # => { non_sort:, subtitle:, title:, part_name:, part_number: }
+                   #    byte-faithful -- the edit forms pre-fill from these
 doc.abstract       # => normalized, paragraph-joined String
 doc.topical_subjects # => ["Civil society", ...]   (every <topic>, for the access copy)
 doc.keywords       # => [...]   (only the editable attribute-free keyword subjects)
@@ -69,6 +70,19 @@ keyword-subject curated-vs-editable split. `build_*_name`'s `role:` defaults to
 - `NEU::MODS.normalize_paragraphs` / `.normalize` — clean **curator freetext** for
   the JSON/Solr access copy (dash/smart-punctuation transliteration, control
   stripping, paragraph handling). The XML preservation copy is never touched.
+
+Titles and prose share the one freetext vocabulary: `to_h[:main_title]` is
+normalized like `abstract`, so an invisible format mark, a Windows-1252 control
+or an exotic space cannot reach Solr or a display template.
+
+**The boundary matters.** Normalization belongs on projections that only feed
+display and the index. `title_parts` is deliberately *not* normalized, because
+Cerberus pre-fills its Metadata and Advanced forms from it and `MODSMerge` writes
+the posted value back into the MODS XML — cleaning there would rewrite the
+curator's own characters in the preservation copy on the next save. Cerberus
+makes the same call for prose: its editable source is the bare `<abstract>` node,
+not `doc.abstract`. Add a normalized *sibling* rather than normalizing a
+projection an edit form reads.
 
 ## Behavior fidelity & known caveats
 

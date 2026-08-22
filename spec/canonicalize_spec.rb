@@ -26,6 +26,10 @@ RSpec.describe NEU::MODS::Canonicalize do
 end
 
 RSpec.describe NEU::MODS::TextNormalizer do
+  # Built from codepoints, so this spec file stays pure ASCII on disk like lib/.
+  let(:vt) { [0x000B].pack("U") } # vertical tab -- Word's manual line break
+  let(:ff) { [0x000C].pack("U") } # form feed -- Word's page break
+
   describe ".normalize_paragraphs" do
     it "collapses soft-wrap newlines within a paragraph but keeps paragraph breaks" do
       input = "Line one\n        continues here.\n\nA second paragraph."
@@ -42,11 +46,38 @@ RSpec.describe NEU::MODS::TextNormalizer do
       smart = [0x201C, 0x68, 0x69, 0x201D, 0x2026].pack("U*") # “hi”…
       expect(NEU::MODS.normalize_paragraphs(smart)).to eq('"hi"...')
     end
+
+    # Word writes a manual line break as U+000B and a page break as U+000C.
+    # Deleting either would weld the words on both sides of it together.
+    it "reads a separator control as the soft wrap it stands for" do
+      expect(NEU::MODS.normalize_paragraphs("one#{vt}two")).to eq("one two")
+      expect(NEU::MODS.normalize_paragraphs("one#{ff}two")).to eq("one two")
+    end
+
+    it "reads a run of two separator controls as a paragraph break" do
+      expect(NEU::MODS.normalize_paragraphs("one#{vt}#{vt}two")).to eq("one\n\ntwo")
+    end
+
+    it "still drops a control that carries no meaning" do
+      nul = [0x0000].pack("U")
+      c1 = [0x0092].pack("U") # the Windows-1252 mojibake signature
+      expect(NEU::MODS.normalize_paragraphs("one#{nul}#{c1}two")).to eq("onetwo")
+    end
+
+    it "reduces a CRLF line ending to one newline, not a paragraph break" do
+      expect(NEU::MODS.normalize_paragraphs("one\r\ntwo")).to eq("one two")
+      expect(NEU::MODS.normalize_paragraphs("one\r\n\r\ntwo")).to eq("one\n\ntwo")
+    end
   end
 
   describe ".normalize" do
     it "turns newlines into spaces for single-line fields" do
       expect(NEU::MODS.normalize("a\nb")).to eq("a b")
+    end
+
+    it "turns a separator control into a space" do
+      expect(NEU::MODS.normalize("one#{vt}two")).to eq("one two")
+      expect(NEU::MODS.normalize("one#{ff}two")).to eq("one two")
     end
   end
 end

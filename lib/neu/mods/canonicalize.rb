@@ -37,9 +37,10 @@ module NEU
     #
     # Pipeline: force UTF-8 + scrub invalid bytes; NFC; map Unicode dashes to '-'
     # (swung-dash to '~'); transliterate the General Punctuation block (smart
-    # quotes, ellipsis, etc.) to ASCII; strip C0/C1 controls (keeping tab/newline);
-    # collapse horizontal-whitespace runs to one space; for paragraph fields,
-    # collapse 2+ newlines to exactly two; strip.
+    # quotes, ellipsis, etc.) to ASCII; map the separator controls to a newline
+    # and strip the rest of C0/C1 (keeping tab/newline); collapse
+    # horizontal-whitespace runs to one space; for paragraph fields, collapse
+    # 2+ newlines to exactly two; strip.
     #
     #   .normalize(str)            -- single-line fields (newlines -> spaces)
     #   .normalize_paragraphs(str) -- fields that may carry paragraph breaks
@@ -67,9 +68,21 @@ module NEU
 
       SWUNG_DASH_RE = Regexp.new(format('\\u%04X', 0x2053)).freeze
 
-      # C0 (U+0000..U+0008, U+000B..U+001F) and C1 (U+007F..U+009F). U+0009 (tab)
-      # and U+000A (newline) are preserved.
-      CONTROL_CODEPOINTS = ((0x0000..0x0008).to_a + (0x000B..0x001F).to_a + (0x007F..0x009F).to_a).freeze
+      # U+000B (vertical tab) and U+000C (form feed) separate words rather than
+      # meaning nothing: Word writes a manual line break as U+000B and a page
+      # break as U+000C. They map to a newline, because deleting one runs the
+      # words either side of it together -- normalize_paragraphs then reads that
+      # newline as the soft wrap the line break was, and normalize turns it into
+      # a space.
+      SEPARATOR_CONTROL_CODEPOINTS = [0x000B, 0x000C].freeze
+      SEPARATOR_CONTROL_RE = char_class(SEPARATOR_CONTROL_CODEPOINTS).freeze
+
+      # C0 (U+0000..U+0008, U+000D..U+001F) and C1 (U+007F..U+009F) -- what is
+      # left once the separators above are accounted for, and none of it carries
+      # meaning in curator text. U+0009 (tab) and U+000A (newline) are preserved.
+      # U+000D is not: dropping it reduces a CRLF line ending to the single
+      # newline it stands for.
+      CONTROL_CODEPOINTS = ((0x0000..0x0008).to_a + (0x000D..0x001F).to_a + (0x007F..0x009F).to_a).freeze
       CONTROL_RE = char_class(CONTROL_CODEPOINTS).freeze
 
       HORIZONTAL_WS_CODEPOINTS = [
@@ -136,6 +149,7 @@ module NEU
         s = s.gsub(DASH_RE, "-")
         s = s.gsub(SWUNG_DASH_RE, "~")
         s = s.gsub(GENERAL_PUNCTUATION_RE) { |c| GENERAL_PUNCTUATION.fetch(c, c) }
+        s = s.gsub(SEPARATOR_CONTROL_RE, "\n")
         s.gsub(CONTROL_RE, "")
       end
     end

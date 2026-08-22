@@ -79,6 +79,20 @@ RSpec.describe NEU::MODS::TextNormalizer do
       expect(NEU::MODS.normalize("one#{vt}two")).to eq("one two")
       expect(NEU::MODS.normalize("one#{ff}two")).to eq("one two")
     end
+
+    # Solr discards a soft hyphen, so "co<00AD>operation" already matches a
+    # search for "cooperation". An ASCII hyphen in its place would index "co"
+    # and "operation" as two tokens and lose the word.
+    it "drops a soft hyphen rather than making it a visible hyphen" do
+      shy = [0x00AD].pack("U")
+      expect(NEU::MODS.normalize("co#{shy}operation")).to eq("cooperation")
+      expect(NEU::MODS.normalize_paragraphs("co#{shy}operation")).to eq("cooperation")
+    end
+
+    it "still folds a dash that a reader can see" do
+      en_dash = [0x2013].pack("U")
+      expect(NEU::MODS.normalize("1900#{en_dash}1910")).to eq("1900-1910")
+    end
   end
 end
 

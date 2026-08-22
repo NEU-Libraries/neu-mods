@@ -38,7 +38,8 @@ module NEU
     # Pipeline: force UTF-8 + scrub invalid bytes; NFC; map Unicode dashes to '-'
     # (swung-dash to '~'); transliterate the General Punctuation block (smart
     # quotes, ellipsis, etc.) to ASCII; map the separator controls to a newline
-    # and strip the rest of C0/C1 (keeping tab/newline); collapse
+    # and drop what is invisible (the soft hyphen, the rest of C0/C1, keeping
+    # tab/newline); collapse
     # horizontal-whitespace runs to one space; for paragraph fields, collapse
     # 2+ newlines to exactly two; strip.
     #
@@ -57,7 +58,7 @@ module NEU
       # NOTE: U+2053 (swung dash) is intentionally excluded from dashes -- it is
       # named "dash" but conventionally maps to ASCII '~', not '-' (V1 prior art).
       DASH_CODEPOINTS = [
-        0x002D, 0x00AD, 0x058A, 0x05BE, 0x1400, 0x1806,
+        0x002D, 0x058A, 0x05BE, 0x1400, 0x1806,
         0x2010, 0x2011, 0x2012, 0x2013, 0x2014, 0x2015,
         0x2043, 0x207B, 0x208B, 0x2212,
         0x2E17, 0x2E1A, 0x2E3A, 0x2E3B, 0x2E40,
@@ -67,6 +68,13 @@ module NEU
       DASH_RE = char_class(DASH_CODEPOINTS).freeze
 
       SWUNG_DASH_RE = Regexp.new(format('\\u%04X', 0x2053)).freeze
+
+      # U+00AD is a hint about where a word may break, not a dash: it renders as
+      # nothing, and Solr discards it, so "co<00AD>operation" already matches a
+      # search for "cooperation". Mapping it to an ASCII hyphen instead would
+      # index "co" and "operation" as two tokens and lose the word, so it is
+      # dropped and kept out of DASH_CODEPOINTS.
+      SOFT_HYPHEN_RE = Regexp.new(format('\\u%04X', 0x00AD)).freeze
 
       # U+000B (vertical tab) and U+000C (form feed) separate words rather than
       # meaning nothing: Word writes a manual line break as U+000B and a page
@@ -150,6 +158,7 @@ module NEU
         s = s.gsub(SWUNG_DASH_RE, "~")
         s = s.gsub(GENERAL_PUNCTUATION_RE) { |c| GENERAL_PUNCTUATION.fetch(c, c) }
         s = s.gsub(SEPARATOR_CONTROL_RE, "\n")
+        s = s.gsub(SOFT_HYPHEN_RE, "")
         s.gsub(CONTROL_RE, "")
       end
     end

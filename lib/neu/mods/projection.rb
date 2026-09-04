@@ -116,9 +116,7 @@ module NEU
 
       # Every <topic> under any top-level <subject> (the access-copy projection,
       # equivalent to Atlas's extract_topical_subjects).
-      def topical_subjects
-        doc.xpath("/mods:mods/mods:subject/mods:topic", NAMESPACE).map { |t| clean(t.text) }
-      end
+      def topical_subjects = texts_at("/mods:mods/mods:subject/mods:topic")
 
       # The other subject axes. Cerberus's IPTC ingest writes subject/geographic
       # from the IPTC City and State fields, so this one was also being written
@@ -190,9 +188,7 @@ module NEU
       def extent = texts_at("/mods:mods/mods:physicalDescription/mods:extent")
       def digital_origin = texts_at("/mods:mods/mods:physicalDescription/mods:digitalOrigin")
 
-      def genres
-        doc.xpath("/mods:mods/mods:genre", NAMESPACE).map { |g| clean(g.text) }
-      end
+      def genres = texts_at("/mods:mods/mods:genre")
 
       # originInfo repeats, and so do publisher and edition within one. Cerberus's
       # IPTC ingest writes the publisher from the IPTC Source field on every batch,
@@ -263,9 +259,7 @@ module NEU
         end
       end
 
-      def identifiers
-        doc.xpath("/mods:mods/mods:identifier", NAMESPACE).map { |i| clean(i.text) }
-      end
+      def identifiers = texts_at("/mods:mods/mods:identifier")
 
       def permanent_url
         node = doc.at_xpath("/mods:mods/mods:identifier[@type='hdl']", NAMESPACE)
@@ -467,8 +461,11 @@ module NEU
         node ? NEU::MODS.canonical_ws(node.text) : ""
       end
 
-      # The :many counterpart of #text_at. Blank members drop out rather than
-      # arriving as nil, so a consumer mapping over the array cannot trip on one.
+      # The :many counterpart of #text_at, and the one way this file builds a
+      # string array. Blank members drop out rather than arriving as nil: a
+      # record template that seeds an empty <topic> for an edit form to fill --
+      # which is exactly what Atlas's MODSBuilder writes -- otherwise projects
+      # [nil], and every consumer of that array has to guard for it.
       def texts_at(xpath)
         doc.xpath(xpath, NAMESPACE).filter_map { |node| clean(node.text) }
       end

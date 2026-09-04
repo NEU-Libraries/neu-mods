@@ -57,6 +57,26 @@ RSpec.describe "projection coverage" do
       expect(doc_with("<mods:typeOfResource>text</mods:typeOfResource><mods:typeOfResource> </mods:typeOfResource>")
                .resource_type).to eq(["text"])
     end
+
+    # A record template that seeds an empty element for an edit form to fill is
+    # normal -- Atlas's MODSBuilder writes an empty <topic> and an empty hdl
+    # <identifier> into every new Work -- so a blank member is the common case,
+    # not an edge one.
+    it "drops a blank member from every string array, not just the widened ones" do
+      seeded = doc_with(<<~XML)
+        <mods:subject><mods:topic></mods:topic></mods:subject>
+        <mods:subject><mods:topic>Interpreting</mods:topic></mods:subject>
+        <mods:genre></mods:genre>
+        <mods:identifier type="hdl" displayLabel="Permanent URL"></mods:identifier>
+      XML
+
+      aggregate_failures do
+        expect(seeded.topical_subjects).to eq(["Interpreting"])
+        expect(seeded.genres).to eq([])
+        expect(seeded.identifiers).to eq([])
+        expect(seeded.permanent_url).to be_nil
+      end
+    end
   end
 
   # MODS does not require usage="primary", so the fallback fires often. It also

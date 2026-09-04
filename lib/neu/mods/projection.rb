@@ -27,15 +27,18 @@ module NEU
       # rewrite the curator's characters in the preservation XML on the next save.
       # #access_title_parts is the normalised surface.
       def title_parts
-        ti = primary_title_info
-        {
-          non_sort: child_text(ti, "mods:nonSort"),
-          subtitle: child_text(ti, "mods:subTitle"),
-          title: child_text(ti, "mods:title"),
-          part_name: child_text(ti, "mods:partName"),
-          part_number: child_text(ti, "mods:partNumber")
-        }
+        title_parts_of(primary_title_info)
       end
+
+      # The variant titles, each composed and normalised like the main title.
+      # MODS repeats titleInfo, so a record may carry more than one of a type.
+      # These are what keeps the primary-title fallback's refusal to promote a
+      # variant from hiding anything: the variant still reaches a reader, under
+      # a label that says which kind of title it is.
+      def alternative_title = variant_titles("alternative")
+      def uniform_title = variant_titles("uniform")
+      def translated_title = variant_titles("translated")
+      def abbreviated_title = variant_titles("abbreviated")
 
       # Composed display title (the former Atlas MODSDecoration#plain_title), driven
       # off the scoped primary title.
@@ -117,6 +120,18 @@ module NEU
         doc.xpath("/mods:mods/mods:subject/mods:topic", NAMESPACE).map { |t| clean(t.text) }
       end
 
+      # The other subject axes. Cerberus's IPTC ingest writes subject/geographic
+      # from the IPTC City and State fields, so this one was also being written
+      # on every batch and read back by nothing.
+      def geographic_subjects = texts_at("/mods:mods/mods:subject/mods:geographic")
+      def temporal_subjects = texts_at("/mods:mods/mods:subject/mods:temporal")
+
+      # Name subjects compose through the same display-value port as #names, so
+      # one person reads the same whether they authored the work or are its
+      # subject.
+      def personal_name_subjects = name_subjects("personal")
+      def corporate_name_subjects = name_subjects("corporate")
+
       # --- Names ---------------------------------------------------------------
 
       # All top-level names as { name:, role: }. `name` reproduces the `mods` gem's
@@ -173,10 +188,54 @@ module NEU
         doc.xpath("/mods:mods/mods:genre", NAMESPACE).map { |g| clean(g.text) }
       end
 
-      def related_series
-        doc.xpath("/mods:mods/mods:relatedItem[@type='series']/mods:titleInfo/mods:title", NAMESPACE)
-           .map { |t| clean(t.text) }
+      # originInfo repeats, and so do publisher and edition within one. Cerberus's
+      # IPTC ingest writes the publisher from the IPTC Source field on every batch,
+      # so this element was being written into the preservation XML and then read
+      # back by nothing.
+      def publication_information = texts_at("/mods:mods/mods:originInfo/mods:publisher")
+      def edition = texts_at("/mods:mods/mods:originInfo/mods:edition")
+
+      # Every top-level note, keeping its @type. The type carries meaning -- a
+      # "statement of responsibility" is not a "funding" note -- so flattening
+      # them into bare strings would repeat the accessCondition mistake.
+      def notes
+        doc.xpath("/mods:mods/mods:note", NAMESPACE).filter_map do |node|
+          value = clean(node.text)
+          { type: clean(node["type"]), value: value } if value
+        end
       end
+
+      # location repeats, and one location mixes kinds: a shelf mark and a URL
+      # are not interchangeable, and a consumer has to know which it holds
+      # before it can decide to linkify it. So the parts stay apart.
+      def location
+        doc.xpath("/mods:mods/mods:location", NAMESPACE).filter_map do |node|
+          entry = {
+            physical_location: child_text(node, "mods:physicalLocation"),
+            shelf_location: child_text(node, "mods:shelfLocation"),
+            url: child_text(node, "mods:url")
+          }
+          entry if entry.values.any?
+        end
+      end
+
+      # subject/cartographics, kept structured. Composing "scale ; projection
+      # coordinates" into one string is display policy, and this gem does not own
+      # that -- a consumer that wants only the coordinates should not have to
+      # unpick a sentence to get them.
+      def map_data
+        doc.xpath("/mods:mods/mods:subject/mods:cartographics", NAMESPACE).filter_map do |node|
+          entry = {
+            scale: child_text(node, "mods:scale"),
+            projection: child_text(node, "mods:projection"),
+            coordinates: child_text(node, "mods:coordinates")
+          }
+          entry if entry.values.any?
+        end
+      end
+
+      def related_series = related_item_titles("series")
+      def host_collections = related_item_titles("host")
 
       def identifiers
         doc.xpath("/mods:mods/mods:identifier", NAMESPACE).map { |i| clean(i.text) }
@@ -193,28 +252,32 @@ module NEU
       # instead of being guessed after it.
       W3CDTF_DATE = /\A(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?\z/
 
-      # Parsed dateCreated paired with the granularity the record declared, as
-      # [value, precision]. value is nil if no originInfo/dateCreated, or "" if
-      # present but unparseable (mirrors Atlas's safe_date_parse rescue).
-      # precision is "year", "month" or "day", and nil whenever value is not a
-      # DateTime.
+      # The three originInfo dates, each paired with the granularity the record
+      # declared, as [value, precision]. value is nil if the element is absent,
+      # or "" if present but unparseable (mirrors Atlas's safe_date_parse
+      # rescue). precision is "year", "month" or "day", and nil whenever value
+      # is not a DateTime.
       #
       # The precision has to be captured here, at the only point where the shape
       # is still visible: a year-only date parses to January 1st, and no consumer
       # downstream can tell that month and day from a record that claimed them.
       # A preservation repository must not project a precision it was not given.
-      def date_created_with_precision
-        node = doc.at_xpath("/mods:mods/mods:originInfo/mods:dateCreated", NAMESPACE)
-        return [nil, nil] unless node
-
-        str = NEU::MODS.canonical_ws(node.text)
-        return [nil, nil] if str.empty?
-
-        parse_w3cdtf(str)
-      end
+      #
+      # These stay :one where the sibling originInfo elements are :many. MODS
+      # repeats them, but a date carries a precision alongside it, and an array
+      # of values paired with an array of precisions is a shape no consumer
+      # wants. A record that ranges its dates uses point="start"/"end", which is
+      # its own projection question rather than a cardinality one.
+      def date_created_with_precision = date_with_precision("dateCreated")
+      def date_issued_with_precision = date_with_precision("dateIssued")
+      def copyright_date_with_precision = date_with_precision("copyrightDate")
 
       def date_created = date_created_with_precision.first
       def date_created_precision = date_created_with_precision.last
+      def date_issued = date_issued_with_precision.first
+      def date_issued_precision = date_issued_with_precision.last
+      def copyright_date = copyright_date_with_precision.first
+      def copyright_date_precision = copyright_date_with_precision.last
 
       # --- Full projection -----------------------------------------------------
 
@@ -231,21 +294,53 @@ module NEU
       # how repeatable MODS elements ended up truncated to their first match.
       # #cardinality_of checks each method against its row.
       FIELDS = {
+        # titles
         main_title: :one,
+        alternative_title: :many,
+        uniform_title: :many,
+        translated_title: :many,
+        abbreviated_title: :many,
+
         names: :many,
         languages: :many,
+        abstract: :one,
+
+        # origin
+        publication_information: :many,
+        edition: :many,
         date_created: :one,
         date_created_precision: :one,
+        date_issued: :one,
+        date_issued_precision: :one,
+        copyright_date: :one,
+        copyright_date_precision: :one,
+
+        # physical description
         resource_type: :many,
         genres: :many,
         format: :many,
         extent: :many,
         digital_origin: :many,
-        abstract: :one,
-        related_series: :many,
+        notes: :many,
+
+        # subjects
         topical_subjects: :many,
+        geographic_subjects: :many,
+        temporal_subjects: :many,
+        personal_name_subjects: :many,
+        corporate_name_subjects: :many,
+        map_data: :many,
+
+        # related items
+        related_series: :many,
+        host_collections: :many,
+
+        # identifiers and location
         identifiers: :many,
         permanent_url: :one,
+        location: :many,
+
+        # access
         access_condition: :one,
         use_and_reproduction: :one,
         restriction_on_access: :one
@@ -297,6 +392,47 @@ module NEU
         [DateTime.new(m[1].to_i, (m[2] || 1).to_i, (m[3] || 1).to_i), precision]
       rescue Date::Error
         ["", nil]
+      end
+
+      def date_with_precision(element)
+        node = doc.at_xpath("/mods:mods/mods:originInfo/mods:#{element}", NAMESPACE)
+        return [nil, nil] unless node
+
+        str = NEU::MODS.canonical_ws(node.text)
+        return [nil, nil] if str.empty?
+
+        parse_w3cdtf(str)
+      end
+
+      # Byte-faithful title parts off any titleInfo node, shared by #title_parts
+      # (which Cerberus pre-fills its edit forms from) and the variant titles.
+      def title_parts_of(node)
+        {
+          non_sort: child_text(node, "mods:nonSort"),
+          subtitle: child_text(node, "mods:subTitle"),
+          title: child_text(node, "mods:title"),
+          part_name: child_text(node, "mods:partName"),
+          part_number: child_text(node, "mods:partNumber")
+        }
+      end
+
+      # A variant title composed the way the access copy wants it: normalised
+      # first, like #access_title_parts, so a curly quote or an invisible format
+      # mark cannot reach Solr or a display template through this route either.
+      def variant_titles(type)
+        doc.xpath("/mods:mods/mods:titleInfo[@type='#{type}']", NAMESPACE).filter_map do |node|
+          parts = title_parts_of(node).transform_values { |value| NEU::MODS.normalize(value.to_s) }
+          clean(Projection.compose_title(parts))
+        end
+      end
+
+      def name_subjects(type)
+        doc.xpath("/mods:mods/mods:subject/mods:name[@type='#{type}']", NAMESPACE)
+           .filter_map { |node| name_display_value_w_date(node) }
+      end
+
+      def related_item_titles(type)
+        texts_at("/mods:mods/mods:relatedItem[@type='#{type}']/mods:titleInfo/mods:title")
       end
 
       def text_at(xpath)

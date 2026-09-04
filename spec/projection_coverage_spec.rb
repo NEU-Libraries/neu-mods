@@ -104,6 +104,133 @@ RSpec.describe "projection coverage" do
     end
   end
 
+  # Every row below was declared on Atlas's Metadata::MODS and projected by
+  # nothing, so it was permanently nil downstream. Asserted per field rather
+  # than on #to_h wholesale, so a failure names the element that regressed.
+  describe "the fields that had no projection" do
+    it "projects the originInfo elements Cerberus's IPTC ingest already writes" do
+      aggregate_failures do
+        expect(doc.publication_information).to eq(["Northeastern University Press"])
+        expect(doc.geographic_subjects).to eq(["Boston (Mass.)"])
+      end
+    end
+
+    it "projects the other two originInfo dates with their granularity" do
+      aggregate_failures do
+        expect(doc.date_issued).to eq(DateTime.new(2025, 6, 1))
+        expect(doc.date_issued_precision).to eq("day")
+        expect(doc.copyright_date).to eq(DateTime.new(2025, 1, 1))
+        expect(doc.copyright_date_precision).to eq("year")
+      end
+    end
+
+    it "projects the edition" do
+      expect(doc.edition).to eq(["2nd ed."])
+    end
+
+    it "keeps each note's @type, which changes what the note means" do
+      expect(doc.notes).to eq([
+                                { type: "statement of responsibility", value: "Prepared by the Working Group." },
+                                { type: nil, value: "A general note." }
+                              ])
+    end
+
+    it "projects the remaining subject axes" do
+      aggregate_failures do
+        expect(doc.temporal_subjects).to eq(["21st century"])
+        expect(doc.personal_name_subjects).to eq(["Smith, John"])
+        expect(doc.corporate_name_subjects).to eq([])
+      end
+    end
+
+    it "composes a name subject through the same display port as #names" do
+      subject_doc = doc_with(<<~XML)
+        <mods:subject><mods:name type="corporate"><mods:namePart>Acme Corp</mods:namePart></mods:name></mods:subject>
+        <mods:subject>
+          <mods:name type="personal">
+            <mods:namePart type="family">Bell</mods:namePart>
+            <mods:namePart type="given">Jen</mods:namePart>
+            <mods:namePart type="date">1920-1990</mods:namePart>
+          </mods:name>
+        </mods:subject>
+      XML
+      aggregate_failures do
+        expect(subject_doc.corporate_name_subjects).to eq(["Acme Corp"])
+        expect(subject_doc.personal_name_subjects).to eq(["Bell, Jen, 1920-1990"])
+      end
+    end
+
+    it "projects the host collection alongside the series" do
+      aggregate_failures do
+        expect(doc.host_collections).to eq(["A Host Collection"])
+        expect(doc.related_series).to eq(["A Series"])
+      end
+    end
+
+    it "keeps a location's parts apart, so a URL is distinguishable from a shelf" do
+      located = doc_with(<<~XML)
+        <mods:location>
+          <mods:physicalLocation>Snell Library</mods:physicalLocation>
+          <mods:shelfLocation>PS3552 .E1</mods:shelfLocation>
+          <mods:url>https://example.org/item</mods:url>
+        </mods:location>
+      XML
+      expect(located.location).to eq([{ physical_location: "Snell Library",
+                                        shelf_location: "PS3552 .E1",
+                                        url: "https://example.org/item" }])
+    end
+
+    it "keeps cartographics structured rather than composing a sentence" do
+      mapped = doc_with(<<~XML)
+        <mods:subject>
+          <mods:cartographics>
+            <mods:scale>1:24,000</mods:scale>
+            <mods:projection>Universal Transverse Mercator</mods:projection>
+            <mods:coordinates>W 71 03 00 N 42 21 00</mods:coordinates>
+          </mods:cartographics>
+        </mods:subject>
+      XML
+      expect(mapped.map_data).to eq([{ scale: "1:24,000",
+                                       projection: "Universal Transverse Mercator",
+                                       coordinates: "W 71 03 00 N 42 21 00" }])
+    end
+
+    it "projects each title variant under its own field" do
+      variants = doc_with(<<~XML)
+        <mods:titleInfo type="alternative"><mods:title>An Alternative Title</mods:title></mods:titleInfo>
+        <mods:titleInfo type="uniform"><mods:title>A Uniform Title</mods:title></mods:titleInfo>
+        <mods:titleInfo type="translated"><mods:title>A Translated Title</mods:title></mods:titleInfo>
+        <mods:titleInfo type="abbreviated"><mods:title>An Abbrev. Title</mods:title></mods:titleInfo>
+      XML
+      aggregate_failures do
+        expect(variants.alternative_title).to eq(["An Alternative Title"])
+        expect(variants.uniform_title).to eq(["A Uniform Title"])
+        expect(variants.translated_title).to eq(["A Translated Title"])
+        expect(variants.abbreviated_title).to eq(["An Abbrev. Title"])
+        expect(variants.plain_title).to eq("Bare")
+      end
+    end
+
+    it "composes and normalises a variant title the way it does the main one" do
+      variant = doc_with(<<~XML)
+        <mods:titleInfo type="alternative">
+          <mods:nonSort>The</mods:nonSort>
+          <mods:title>Real Thing</mods:title>
+          <mods:subTitle>A Study</mods:subTitle>
+        </mods:titleInfo>
+      XML
+      expect(variant.alternative_title).to eq(["The Real Thing: A Study"])
+    end
+
+    it "harvests every titleInfo of a type, since MODS repeats the element" do
+      two = doc_with(<<~XML)
+        <mods:titleInfo type="alternative"><mods:title>First Alternative</mods:title></mods:titleInfo>
+        <mods:titleInfo type="alternative"><mods:title>Second Alternative</mods:title></mods:titleInfo>
+      XML
+      expect(two.alternative_title).to eq(["First Alternative", "Second Alternative"])
+    end
+  end
+
   describe "accessCondition is projected per @type" do
     it "keeps a restriction and a licence apart" do
       aggregate_failures do

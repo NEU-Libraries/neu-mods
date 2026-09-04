@@ -348,6 +348,100 @@ RSpec.describe "projection coverage" do
     end
   end
 
+  # A cataloguer was given a spreadsheet column for each of these, so the
+  # production corpus carries them, and each one projected nothing.
+  describe "the corpus-proven elements that had no projection" do
+    it "projects the remaining originInfo elements" do
+      aggregate_failures do
+        expect(doc.place_of_publication).to eq(["Boston"])
+        expect(doc.issuance).to eq(["monographic"])
+        expect(doc.frequency).to eq(["Quarterly"])
+      end
+    end
+
+    it "projects the contents list and the reformatting quality" do
+      aggregate_failures do
+        expect(doc.table_of_contents).to eq(["Chapter 1 -- Chapter 2"])
+        expect(doc.reformatting_quality).to eq(["preservation"])
+      end
+    end
+
+    # An LCC or DDC call number. Not the same concept as Atlas's
+    # classification_ssim, which carries a FileSet content-type vocabulary.
+    it "projects the call number" do
+      expect(doc.classification).to eq(["PS3552.E1"])
+    end
+
+    it "projects the two flat subject axes that were missing" do
+      aggregate_failures do
+        expect(doc.genre_subjects).to eq(["Field recordings"])
+        expect(doc.geographic_code_subjects).to eq(["n-us-ny"])
+      end
+    end
+
+    # A subject that is a work has a nonSort like any other title, so it
+    # composes through the same port rather than taking titleInfo/title alone.
+    it "composes a title subject the way it composes the main title" do
+      expect(doc.title_subjects).to eq(["The Great Gatsby"])
+    end
+
+    # bdr_43888.mods.xml carries this axis and NO subject/geographic at all, so
+    # that record projected no place. A live ingest path, not a hypothetical.
+    it "keeps a hierarchical place structured rather than flattening it" do
+      entry = doc.hierarchical_geographic_subjects.first
+
+      aggregate_failures do
+        expect(entry[:country]).to eq("United States")
+        expect(entry[:state]).to eq("New York")
+        expect(entry[:city]).to eq("Parksville")
+        expect(entry[:continent]).to be_nil
+      end
+    end
+
+    it "covers every level the schema allows, including the camelCase one" do
+      doc = doc_with(<<~XML)
+        <mods:subject>
+          <mods:hierarchicalGeographic>
+            <mods:citySection>Back Bay</mods:citySection>
+            <mods:island>Nantucket</mods:island>
+          </mods:hierarchicalGeographic>
+        </mods:subject>
+      XML
+
+      entry = doc.hierarchical_geographic_subjects.first
+      aggregate_failures do
+        expect(entry[:city_section]).to eq("Back Bay")
+        expect(entry[:island]).to eq("Nantucket")
+      end
+    end
+
+    it "skips a hierarchicalGeographic that names no level" do
+      doc = doc_with("<mods:subject><mods:hierarchicalGeographic/></mods:subject>")
+      expect(doc.hierarchical_geographic_subjects).to eq([])
+    end
+
+    # Describes the cataloguing rather than the resource. Dropping a
+    # preservation repository's provenance statement on read is wrong on its
+    # face, whatever a consumer then decides to show.
+    it "projects the cataloguing provenance as one structured value" do
+      expect(doc.record_info).to eq({
+                                      content_source: "Northeastern University Libraries",
+                                      origin: "Created by a batch load",
+                                      description_standard: "rda",
+                                      creation_date: "2025-01-15",
+                                      change_date: "2025-02-01",
+                                      language_of_cataloging: "English"
+                                    })
+    end
+
+    it "reports no record info at all rather than a hash of nils" do
+      aggregate_failures do
+        expect(doc_with("").record_info).to be_nil
+        expect(doc_with("<mods:recordInfo/>").record_info).to be_nil
+      end
+    end
+  end
+
   describe "accessCondition is projected per @type" do
     it "keeps a restriction and a licence apart" do
       aggregate_failures do

@@ -130,6 +130,37 @@ module NEU
       def personal_name_subjects = name_subjects("personal")
       def corporate_name_subjects = name_subjects("corporate")
 
+      def genre_subjects = texts_at("/mods:mods/mods:subject/mods:genre")
+
+      # A MARC GAC code. Projected as the record wrote it: turning it into a
+      # place name needs a lookup table, which is the same call the gem already
+      # made for MARC relators -- the label vocabulary belongs to the consumer.
+      def geographic_code_subjects = texts_at("/mods:mods/mods:subject/mods:geographicCode")
+
+      # A subject that is a work has a nonSort, a subTitle and part numbers like
+      # any other titleInfo, so it composes through the same port as the main
+      # title rather than taking titleInfo/title alone.
+      def title_subjects
+        doc.xpath("/mods:mods/mods:subject/mods:titleInfo", NAMESPACE).filter_map do |node|
+          parts = title_parts_of(node).transform_values { |value| NEU::MODS.normalize(value.to_s) }
+          clean(Projection.compose_title(parts))
+        end
+      end
+
+      # Kept structured for the reason #map_data is. Flattening country / state
+      # / city into "United States -- New York (State) -- Parksville" would make
+      # a consumer that wants the city alone unpick a sentence.
+      #
+      # This is the axis bdr_43888.mods.xml uses INSTEAD of subject/geographic,
+      # so that record projected no place at all -- a live ingest path, not a
+      # hypothetical.
+      def hierarchical_geographic_subjects
+        doc.xpath("/mods:mods/mods:subject/mods:hierarchicalGeographic", NAMESPACE).filter_map do |node|
+          entry = HIERARCHICAL_GEOGRAPHIC_LEVELS.to_h { |level| [level, child_text(node, "mods:#{camelize(level)}")] }
+          entry if entry.values.any?
+        end
+      end
+
       # --- Names ---------------------------------------------------------------
 
       # One name as the access copy wants it. `affiliation` is how a reader
@@ -208,6 +239,23 @@ module NEU
       # back by nothing.
       def publication_information = texts_at("/mods:mods/mods:originInfo/mods:publisher")
       def edition = texts_at("/mods:mods/mods:originInfo/mods:edition")
+      def place_of_publication = texts_at("/mods:mods/mods:originInfo/mods:place/mods:placeTerm")
+      def issuance = texts_at("/mods:mods/mods:originInfo/mods:issuance")
+
+      # Serials. The @authority a record puts on a frequency is not projected:
+      # authority handling is a question the gem defers everywhere else -- for
+      # genre, subject and name -- and answering it for one field would be
+      # inconsistent.
+      def frequency = texts_at("/mods:mods/mods:originInfo/mods:frequency")
+
+      def table_of_contents = texts_at("/mods:mods/mods:tableOfContents")
+      def reformatting_quality = texts_at("/mods:mods/mods:physicalDescription/mods:reformattingQuality")
+
+      # An LCC or DDC call number. Note this is NOT the same concept as Atlas's
+      # classification_ssim, which carries a FileSet content-type vocabulary --
+      # the name collision is accidental and the consumer has to pick a free
+      # Solr field.
+      def classification = texts_at("/mods:mods/mods:classification")
 
       # Every top-level note, keeping its @type. The type carries meaning -- a
       # "statement of responsibility" is not a "funding" note -- so flattening
@@ -297,6 +345,26 @@ module NEU
       # or a full date. Matching the shape explicitly, rather than widening
       # DateTime.parse, is what lets the declared precision fall out of the parse
       # instead of being guessed after it.
+      # The eleven children the XSD allows under hierarchicalGeographic, in the
+      # order MODS lists them -- broadest first, which is also the order a
+      # consumer composing a place string wants to reverse.
+      HIERARCHICAL_GEOGRAPHIC_LEVELS = %i[
+        continent country province region state territory county city
+        city_section island area
+      ].freeze
+
+      # recordInfo children. Read as a single value: the schema repeats the
+      # element, but a record with two cataloguing provenances is not a case
+      # anyone has, and an array here buys nothing.
+      RECORD_INFO_PARTS = {
+        content_source: "mods:recordContentSource",
+        origin: "mods:recordOrigin",
+        description_standard: "mods:descriptionStandard",
+        creation_date: "mods:recordCreationDate",
+        change_date: "mods:recordChangeDate",
+        language_of_cataloging: "mods:languageOfCataloging/mods:languageTerm"
+      }.freeze
+
       W3CDTF_DATE = /\A(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?\z/
 
       # What #date_parts returns when the element is absent entirely, so an
@@ -351,6 +419,19 @@ module NEU
       def date_issued_with_precision = [date_issued, date_issued_precision]
       def copyright_date_with_precision = [copyright_date, copyright_date_precision]
 
+      # Who catalogued this record, to what standard, and when. It describes the
+      # CATALOGUING rather than the resource, which is why it is one value and
+      # why a consumer is unlikely to want it beside Publisher -- but dropping a
+      # preservation repository's provenance statement on read is wrong on its
+      # face, so it is projected and the display question is the consumer's.
+      def record_info
+        node = doc.at_xpath("/mods:mods/mods:recordInfo", NAMESPACE)
+        return nil unless node
+
+        entry = RECORD_INFO_PARTS.transform_values { |xpath| child_text(node, xpath) }
+        entry if entry.values.any?
+      end
+
       # --- Full projection -----------------------------------------------------
 
       # The field registry: the single declaration of what this gem projects.
@@ -379,7 +460,10 @@ module NEU
 
         # origin
         publication_information: :many,
+        place_of_publication: :many,
         edition: :many,
+        issuance: :many,
+        frequency: :many,
         # Six rows per originInfo date. Flat rather than one nested value,
         # because the value half has consumers that need a real date object.
         date_created: :one,
@@ -407,7 +491,9 @@ module NEU
         format: :many,
         extent: :many,
         digital_origin: :many,
+        reformatting_quality: :many,
         notes: :many,
+        table_of_contents: :many,
 
         # subjects
         topical_subjects: :many,
@@ -415,6 +501,10 @@ module NEU
         temporal_subjects: :many,
         personal_name_subjects: :many,
         corporate_name_subjects: :many,
+        genre_subjects: :many,
+        geographic_code_subjects: :many,
+        title_subjects: :many,
+        hierarchical_geographic_subjects: :many,
         map_data: :many,
 
         # related items
@@ -424,7 +514,9 @@ module NEU
 
         # identifiers and location
         identifiers: :many,
+        classification: :many,
         permanent_url: :one,
+        record_info: :one,
         location: :many,
 
         # access
@@ -575,6 +667,13 @@ module NEU
       # [nil], and every consumer of that array has to guard for it.
       # #texts_at scoped to a node rather than the document, for a repeatable
       # child of one element.
+      # :city_section -> "citySection". The level names are snake_case in the
+      # projection and camelCase in the schema.
+      def camelize(level)
+        head, *rest = level.to_s.split("_")
+        [head, *rest.map(&:capitalize)].join
+      end
+
       def texts_under(node, xpath)
         node.xpath(xpath, NAMESPACE).filter_map { |child| clean(child.text) }
       end

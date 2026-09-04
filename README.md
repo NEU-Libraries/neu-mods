@@ -50,6 +50,13 @@ doc.related_items  # => [{ type: "otherFormat", title: "..." }, ...]
                    #    every relatedItem that is not a series or a host
 doc.location       # => [{ physical_location:, shelf_location:, url: }, ...]
 doc.map_data       # => [{ scale:, projection:, coordinates: }, ...]
+doc.title_subjects # => ["The Great Gatsby"]   composed like the main title
+doc.hierarchical_geographic_subjects
+                   # => [{ country:, state:, city:, ... }, ...]   eleven levels,
+                   #    structured for the reason map_data is
+doc.record_info    # => { content_source:, origin:, description_standard:,
+                   #      creation_date:, change_date:, language_of_cataloging: }
+                   #    describes the CATALOGUING, not the resource
 doc.to_h           # => full projection, keyed to Atlas's Metadata::MODS attributes
 
 # The field registry -- the single declaration of what this gem projects.

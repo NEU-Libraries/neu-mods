@@ -16,9 +16,9 @@ RSpec.describe "Creator read / select / build" do
     it "exposes all of them as preserved (read-only) names with roles" do
       expect(doc.preserved_names).to eq(
         [
-          { name: "Cohen, Daniel J.(Daniel Jared), 1968-", role: "Creator" },
-          { name: "Northeastern University (Boston, Mass.) Libraries", role: "Creator" },
-          { name: "Flynn, Stephen E.", role: "Contributor" }
+          { name: "Cohen, Daniel J.(Daniel Jared), 1968-", role: "Creator", affiliation: [] },
+          { name: "Northeastern University (Boston, Mass.) Libraries", role: "Creator", affiliation: [] },
+          { name: "Flynn, Stephen E.", role: "Contributor", affiliation: [] }
         ]
       )
     end

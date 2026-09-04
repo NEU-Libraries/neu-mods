@@ -271,6 +271,68 @@ RSpec.describe "projection coverage" do
     end
   end
 
+  # A cataloguer was given a column for each of these, so the production corpus
+  # carries them. The projection dropped the attribute that says what the value
+  # IS, which is the same defect class as the accessCondition collapse: not a
+  # missing field, but a value a reader cannot interpret.
+  describe "the attributes that say what a value is" do
+    it "keeps each identifier's @type, so a DOI is not just digits" do
+      doc = doc_with(<<~XML)
+        <mods:identifier type="doi">10.1234/x</mods:identifier>
+        <mods:identifier type="COLID">bdr:12345</mods:identifier>
+        <mods:identifier>2047/D20254217</mods:identifier>
+      XML
+
+      expect(doc.identifiers).to eq([
+                                      { type: "doi", value: "10.1234/x" },
+                                      { type: "COLID", value: "bdr:12345" },
+                                      { type: nil, value: "2047/D20254217" }
+                                    ])
+    end
+
+    it "still resolves the permanent URL off the hdl identifier" do
+      doc = doc_with(%(<mods:identifier type="hdl">http://hdl.handle.net/2047/D1</mods:identifier>))
+      expect(doc.permanent_url).to eq("http://hdl.handle.net/2047/D1")
+    end
+
+    it "drops an identifier with no value rather than projecting a typed blank" do
+      expect(doc_with(%(<mods:identifier type="hdl"></mods:identifier>)).identifiers).to eq([])
+    end
+
+    # How a reader tells one J. Doe from another, and the basis of any future
+    # department browse.
+    it "projects a name's affiliations, which repeat in the schema" do
+      doc = doc_with(<<~XML)
+        <mods:name type="personal">
+          <mods:namePart type="family">Doe</mods:namePart>
+          <mods:namePart type="given">Jane</mods:namePart>
+          <mods:affiliation>Department of Physics</mods:affiliation>
+          <mods:affiliation>Northeastern University</mods:affiliation>
+          <mods:role><mods:roleTerm type="text">Creator</mods:roleTerm></mods:role>
+        </mods:name>
+      XML
+
+      expect(doc.names).to eq([{ name: "Doe, Jane", role: "Creator",
+                                 affiliation: ["Department of Physics", "Northeastern University"] }])
+    end
+
+    it "gives a name with no affiliation an empty list, not a nil" do
+      doc = doc_with("<mods:name><mods:namePart>Anon</mods:namePart></mods:name>")
+      expect(doc.names.first[:affiliation]).to eq([])
+    end
+
+    it "carries the affiliation into the preserved (read-only) names too" do
+      doc = doc_with(<<~XML)
+        <mods:name type="personal" authority="naf">
+          <mods:namePart>Doe, Jane</mods:namePart>
+          <mods:affiliation>Northeastern University</mods:affiliation>
+        </mods:name>
+      XML
+
+      expect(doc.preserved_names.first[:affiliation]).to eq(["Northeastern University"])
+    end
+  end
+
   describe "accessCondition is projected per @type" do
     it "keeps a restriction and a licence apart" do
       aggregate_failures do

@@ -25,9 +25,9 @@ RSpec.describe "Conformance: work-mods.xml projection" do
   it "reproduces the mods-gem name display_value_w_date (quirks included)" do
     expect(projection[:names]).to eq(
       [
-        { name: "Cohen, Daniel J.(Daniel Jared), 1968-", role: "Creator" },
-        { name: "Northeastern University (Boston, Mass.) Libraries", role: "Creator" },
-        { name: "Flynn, Stephen E.", role: "Contributor" }
+        { name: "Cohen, Daniel J.(Daniel Jared), 1968-", role: "Creator", affiliation: [] },
+        { name: "Northeastern University (Boston, Mass.) Libraries", role: "Creator", affiliation: [] },
+        { name: "Flynn, Stephen E.", role: "Contributor", affiliation: [] }
       ]
     )
   end
@@ -54,7 +54,8 @@ RSpec.describe "Conformance: work-mods.xml projection" do
       expect(projection[:extent]).to eq(["00:34:45"])
       expect(projection[:digital_origin]).to eq(["born digital"])
       expect(projection[:related_series]).to eq(["What's New Podcast"])
-      expect(projection[:identifiers]).to eq(["http://hdl.handle.net/2047/D20254217"])
+      expect(projection[:identifiers])
+        .to eq([{ type: "hdl", value: "http://hdl.handle.net/2047/D20254217" }])
       expect(projection[:permanent_url]).to eq("http://hdl.handle.net/2047/D20254217")
       expect(projection[:date_created]).to eq(DateTime.parse("2017-09-19"))
       expect(projection[:date_created_precision]).to eq("day")

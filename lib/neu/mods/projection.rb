@@ -132,14 +132,26 @@ module NEU
 
       # --- Names ---------------------------------------------------------------
 
+      # One name as the access copy wants it. `affiliation` is how a reader
+      # tells one J. Doe from another, and it is the field an institutional
+      # repository most wants: it repeats in the schema, so it is an array.
+      #
+      # Added to the entry rather than as a parallel field, so a name and its
+      # affiliation cannot be zipped together wrongly by a consumer.
+      def name_entry(node)
+        {
+          name: name_display_value_w_date(node),
+          role: name_role(node),
+          affiliation: texts_under(node, "mods:affiliation")
+        }
+      end
+
       # All top-level names as { name:, role: }. `name` reproduces the `mods` gem's
       # display_value_w_date (including its quirks -- faithfully, so existing Solr/
       # display output is preserved). `role` prefers the type="text" roleTerm,
       # falling back to the raw code (NOT MARC-relator-translated -- see README).
       def names
-        doc.xpath("/mods:mods/mods:name", NAMESPACE).map do |node|
-          { name: name_display_value_w_date(node), role: name_role(node) }
-        end
+        doc.xpath("/mods:mods/mods:name", NAMESPACE).map { |node| name_entry(node) }
       end
 
       # Editable (depositor-managed) creators: the plain names (no authority
@@ -161,7 +173,7 @@ module NEU
       def preserved_names
         doc.xpath("/mods:mods/mods:name", NAMESPACE)
            .reject { |node| editable_creator_name?(node) }
-           .map { |node| { name: name_display_value_w_date(node), role: name_role(node) } }
+           .map { |node| name_entry(node) }
       end
 
       # --- Scalars / simple arrays --------------------------------------------
@@ -263,7 +275,18 @@ module NEU
         end
       end
 
-      def identifiers = texts_at("/mods:mods/mods:identifier")
+      # { type:, value: }, because a DOI, an accession number and a collection
+      # id are not the same kind of thing and no consumer can tell them apart
+      # from the digits alone -- a reader shown a bare 10.1234/x cannot see it
+      # is a DOI, and a display cannot decide to linkify it. The same argument
+      # #notes already makes for its @type, and #permanent_url already proves
+      # the attribute is load-bearing by special-casing @type='hdl'.
+      def identifiers
+        doc.xpath("/mods:mods/mods:identifier", NAMESPACE).filter_map do |node|
+          value = clean(node.text)
+          { type: clean(node["type"]), value: value } if value
+        end
+      end
 
       def permanent_url
         node = doc.at_xpath("/mods:mods/mods:identifier[@type='hdl']", NAMESPACE)
@@ -470,6 +493,12 @@ module NEU
       # record template that seeds an empty <topic> for an edit form to fill --
       # which is exactly what Atlas's MODSBuilder writes -- otherwise projects
       # [nil], and every consumer of that array has to guard for it.
+      # #texts_at scoped to a node rather than the document, for a repeatable
+      # child of one element.
+      def texts_under(node, xpath)
+        node.xpath(xpath, NAMESPACE).filter_map { |child| clean(child.text) }
+      end
+
       def texts_at(xpath)
         doc.xpath(xpath, NAMESPACE).filter_map { |node| clean(node.text) }
       end

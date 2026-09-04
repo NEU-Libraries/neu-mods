@@ -167,6 +167,26 @@ RSpec.describe "projection coverage" do
       end
     end
 
+    it "catches every other relatedItem type, keeping the relationship" do
+      expect(doc.related_items).to eq([{ type: "otherFormat", title: "The Print Edition" }])
+    end
+
+    it "does not repeat a relatedItem that already has a field of its own" do
+      expect(doc.related_items.map { |item| item[:type] }).not_to include("host", "series")
+    end
+
+    it "catches an untyped relatedItem, which no other field would carry" do
+      untyped = doc_with(<<~XML)
+        <mods:relatedItem><mods:titleInfo><mods:title>Something Related</mods:title></mods:titleInfo></mods:relatedItem>
+      XML
+      expect(untyped.related_items).to eq([{ type: nil, title: "Something Related" }])
+    end
+
+    it "skips a relatedItem with no title, which projects nothing useful" do
+      titleless = doc_with(%(<mods:relatedItem type="original"><mods:note>See the file.</mods:note></mods:relatedItem>))
+      expect(titleless.related_items).to eq([])
+    end
+
     it "keeps a location's parts apart, so a URL is distinguishable from a shelf" do
       located = doc_with(<<~XML)
         <mods:location>

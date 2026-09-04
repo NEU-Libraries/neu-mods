@@ -237,6 +237,26 @@ module NEU
       def related_series = related_item_titles("series")
       def host_collections = related_item_titles("host")
 
+      # relatedItem @type values that already have a field of their own, so the
+      # catch-all below does not repeat them.
+      NAMED_RELATED_ITEM_TYPES = %w[series host].freeze
+
+      # Every other relatedItem, keeping its @type. MODS also defines
+      # constituent, otherFormat, original, preceding, succeeding, isReferencedBy
+      # and reviewOf, and a record carrying any of them projected nothing at all.
+      # The type rides along because "the print edition" and "reviewed in" are
+      # not the same relationship, and no consumer can recover which it holds
+      # from the title alone. An untyped relatedItem lands here with a nil type.
+      def related_items
+        doc.xpath("/mods:mods/mods:relatedItem", NAMESPACE).filter_map do |node|
+          type = clean(node["type"])
+          next if NAMED_RELATED_ITEM_TYPES.include?(type)
+
+          title = clean(node.at_xpath("mods:titleInfo/mods:title", NAMESPACE)&.text)
+          { type: type, title: title } if title
+        end
+      end
+
       def identifiers
         doc.xpath("/mods:mods/mods:identifier", NAMESPACE).map { |i| clean(i.text) }
       end
@@ -334,6 +354,7 @@ module NEU
         # related items
         related_series: :many,
         host_collections: :many,
+        related_items: :many,
 
         # identifiers and location
         identifiers: :many,

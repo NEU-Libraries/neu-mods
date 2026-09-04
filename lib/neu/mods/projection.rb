@@ -210,11 +210,15 @@ module NEU
       # location repeats, and one location mixes kinds: a shelf mark and a URL
       # are not interchangeable, and a consumer has to know which it holds
       # before it can decide to linkify it. So the parts stay apart.
+      #
+      # The shelf mark is mods:shelfLocator. There is no shelfLocation element
+      # in MODS, and the spec fixture carried the same misspelling, so the
+      # field was unconditionally nil and the spec asserted nothing.
       def location
         doc.xpath("/mods:mods/mods:location", NAMESPACE).filter_map do |node|
           entry = {
             physical_location: child_text(node, "mods:physicalLocation"),
-            shelf_location: child_text(node, "mods:shelfLocation"),
+            shelf_location: child_text(node, "mods:shelfLocator"),
             url: child_text(node, "mods:url")
           }
           entry if entry.values.any?

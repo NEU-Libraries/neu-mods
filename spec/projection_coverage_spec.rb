@@ -211,7 +211,7 @@ RSpec.describe "projection coverage" do
       located = doc_with(<<~XML)
         <mods:location>
           <mods:physicalLocation>Snell Library</mods:physicalLocation>
-          <mods:shelfLocation>PS3552 .E1</mods:shelfLocation>
+          <mods:shelfLocator>PS3552 .E1</mods:shelfLocator>
           <mods:url>https://example.org/item</mods:url>
         </mods:location>
       XML

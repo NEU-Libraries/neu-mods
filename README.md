@@ -33,6 +33,11 @@ doc.title_parts    # => { non_sort:, subtitle:, title:, part_name:, part_number:
 doc.abstract       # => normalized, paragraph-joined String
 doc.topical_subjects # => ["Civil society", ...]   (every <topic>, for the access copy)
 doc.keywords       # => [...]   (only the editable attribute-free keyword subjects)
+doc.date_created_with_precision
+                   # => [DateTime, "year"|"month"|"day"]   w3cdtf YYYY, YYYY-MM
+                   #    and YYYY-MM-DD all parse; the precision says which shape
+                   #    the record declared, so display cannot invent a month or
+                   #    a day the record never claimed
 doc.to_h           # => full projection, keyed to Atlas's Metadata::MODS attributes
 
 # Pure title composition (no document needed) — for callers that already hold

@@ -57,6 +57,7 @@ RSpec.describe "Conformance: work-mods.xml projection" do
       expect(projection[:identifiers]).to eq(["http://hdl.handle.net/2047/D20254217"])
       expect(projection[:permanent_url]).to eq("http://hdl.handle.net/2047/D20254217")
       expect(projection[:date_created]).to eq(DateTime.parse("2017-09-19"))
+      expect(projection[:date_created_precision]).to eq("day")
     end
   end
 
@@ -77,9 +78,10 @@ RSpec.describe "Conformance: work-mods.xml projection" do
 
   it "keys to_h to Atlas's Metadata::MODS attribute names" do
     expect(projection.keys).to contain_exactly(
-      :main_title, :names, :languages, :date_created, :resource_type, :genres,
-      :format, :extent, :digital_origin, :abstract, :related_series,
-      :topical_subjects, :identifiers, :permanent_url, :access_condition
+      :main_title, :names, :languages, :date_created, :date_created_precision,
+      :resource_type, :genres, :format, :extent, :digital_origin, :abstract,
+      :related_series, :topical_subjects, :identifiers, :permanent_url,
+      :access_condition
     )
   end
 end

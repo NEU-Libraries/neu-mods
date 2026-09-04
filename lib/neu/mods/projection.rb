@@ -171,32 +171,48 @@ module NEU
         node && clean(node.text)
       end
 
-      # Parsed dateCreated, or nil if no originInfo/dateCreated, or "" if present
-      # but unparseable (mirrors Atlas's safe_date_parse rescue).
-      def date_created
+      # The three w3cdtf date shapes a dateCreated may stop at: year, year-month,
+      # or a full date. Matching the shape explicitly, rather than widening
+      # DateTime.parse, is what lets the declared precision fall out of the parse
+      # instead of being guessed after it.
+      W3CDTF_DATE = /\A(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?\z/
+
+      # Parsed dateCreated paired with the granularity the record declared, as
+      # [value, precision]. value is nil if no originInfo/dateCreated, or "" if
+      # present but unparseable (mirrors Atlas's safe_date_parse rescue).
+      # precision is "year", "month" or "day", and nil whenever value is not a
+      # DateTime.
+      #
+      # The precision has to be captured here, at the only point where the shape
+      # is still visible: a year-only date parses to January 1st, and no consumer
+      # downstream can tell that month and day from a record that claimed them.
+      # A preservation repository must not project a precision it was not given.
+      def date_created_with_precision
         node = doc.at_xpath("/mods:mods/mods:originInfo/mods:dateCreated", NAMESPACE)
-        return nil unless node
+        return [nil, nil] unless node
 
         str = NEU::MODS.canonical_ws(node.text)
-        return nil if str.empty?
+        return [nil, nil] if str.empty?
 
-        begin
-          DateTime.parse(str)
-        rescue Date::Error
-          ""
-        end
+        parse_w3cdtf(str)
       end
+
+      def date_created = date_created_with_precision.first
+      def date_created_precision = date_created_with_precision.last
 
       # --- Full projection -----------------------------------------------------
 
       # The complete read projection, keyed to Atlas's Metadata::MODS attribute
       # names -- a drop-in source for `convert_xml_to_json`.
       def to_h
+        date, date_precision = date_created_with_precision
+
         {
           main_title: access_title_parts,
           names: names,
           languages: languages,
-          date_created: date_created,
+          date_created: date,
+          date_created_precision: date_precision,
           resource_type: resource_type,
           genres: genres,
           format: format,
@@ -222,6 +238,26 @@ module NEU
       private
 
       # --- helpers -------------------------------------------------------------
+
+      # A shape-matched but impossible date (2026-13, 2026-02-30) reaches DateTime
+      # and raises; it falls to the "" sentinel like any other unparseable value.
+      # Anything outside the three shapes keeps the old permissive parse, so a
+      # timestamp still projects as a full date.
+      def parse_w3cdtf(str)
+        m = W3CDTF_DATE.match(str)
+        return [DateTime.parse(str), "day"] unless m
+
+        precision = if m[3]
+                      "day"
+                    elsif m[2]
+                      "month"
+                    else
+                      "year"
+                    end
+        [DateTime.new(m[1].to_i, (m[2] || 1).to_i, (m[3] || 1).to_i), precision]
+      rescue Date::Error
+        ["", nil]
+      end
 
       def text_at(xpath)
         node = doc.at_xpath(xpath, NAMESPACE)

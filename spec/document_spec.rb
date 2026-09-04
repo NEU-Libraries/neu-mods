@@ -77,6 +77,74 @@ RSpec.describe NEU::MODS::Document do
     end
   end
 
+  # w3cdtf lets a curator stop at the year or the month, and the fixture's full
+  # date is only one of the three legal shapes. The precision travels with the
+  # value because the parse destroys it: 2026 and 2026-01-01 both become the
+  # same DateTime, and only the precision tells a display layer which one the
+  # record actually claimed.
+  describe "dateCreated granularity" do
+    def doc_with_date(date)
+      described_class.parse(<<~XML)
+        <?xml version="1.0" encoding="UTF-8"?>
+        <mods:mods xmlns:mods="http://www.loc.gov/mods/v3">
+          <mods:titleInfo usage="primary"><mods:title>Bare</mods:title></mods:titleInfo>
+          <mods:originInfo>
+            <mods:dateCreated keyDate="yes" encoding="w3cdtf">#{date}</mods:dateCreated>
+          </mods:originInfo>
+        </mods:mods>
+      XML
+    end
+
+    it "parses a full date at day precision" do
+      expect(doc_with_date("2026-02-20").date_created_with_precision)
+        .to eq([DateTime.new(2026, 2, 20), "day"])
+    end
+
+    it "parses a year-month at month precision, filling the day with the 1st" do
+      expect(doc_with_date("2026-02").date_created_with_precision)
+        .to eq([DateTime.new(2026, 2, 1), "month"])
+    end
+
+    it "parses a bare year at year precision, filling the month and day with the 1st" do
+      expect(doc_with_date("2026").date_created_with_precision)
+        .to eq([DateTime.new(2026, 1, 1), "year"])
+    end
+
+    it "falls to the sentinel for a shape-matched but impossible date" do
+      aggregate_failures do
+        expect(doc_with_date("2026-13").date_created_with_precision).to eq(["", nil])
+        expect(doc_with_date("2026-02-30").date_created_with_precision).to eq(["", nil])
+      end
+    end
+
+    it "falls to the sentinel for a qualified date outside w3cdtf" do
+      expect(doc_with_date("circa 2026").date_created_with_precision).to eq(["", nil])
+    end
+
+    it "returns nil for both halves when there is no dateCreated" do
+      minimal = described_class.parse(<<~XML)
+        <?xml version="1.0"?>
+        <mods:mods xmlns:mods="http://www.loc.gov/mods/v3">
+          <mods:titleInfo usage="primary"><mods:title>Bare</mods:title></mods:titleInfo>
+        </mods:mods>
+      XML
+      expect(minimal.date_created_with_precision).to eq([nil, nil])
+    end
+
+    it "exposes each half on its own so existing value-only callers are unaffected" do
+      doc = doc_with_date("2026-02")
+      aggregate_failures do
+        expect(doc.date_created).to eq(DateTime.new(2026, 2, 1))
+        expect(doc.date_created_precision).to eq("month")
+      end
+    end
+
+    it "projects both keys into to_h" do
+      expect(doc_with_date("2026").to_h)
+        .to include(date_created: DateTime.new(2026, 1, 1), date_created_precision: "year")
+    end
+  end
+
   describe "edge cases on a minimal document" do
     let(:minimal) do
       described_class.parse(<<~XML)
@@ -94,6 +162,7 @@ RSpec.describe NEU::MODS::Document do
         expect(minimal.resource_type).to eq("") # scalar absent -> "" (Atlas parity)
         expect(minimal.permanent_url).to be_nil # node absent -> nil (Atlas parity)
         expect(minimal.date_created).to be_nil
+        expect(minimal.date_created_precision).to be_nil
         expect(minimal.names).to eq([])
         expect(minimal.topical_subjects).to eq([])
       end

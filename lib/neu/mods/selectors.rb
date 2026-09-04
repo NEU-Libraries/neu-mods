@@ -8,12 +8,28 @@ module NEU
     # definition is the point: the node an editor changes is provably the node the
     # projection reads. Mixed into Document; operates on `doc`.
     module Selectors
-      # Top-level primary titleInfo, falling back to the first top-level titleInfo.
-      # Scoped to direct children of <mods:mods> so a relatedItem's nested
-      # titleInfo (e.g. a series title) is never matched.
+      # Top-level primary titleInfo, falling back to the first top-level titleInfo
+      # that is NOT a variant. Scoped to direct children of <mods:mods> so a
+      # relatedItem's nested titleInfo (e.g. a series title) is never matched.
+      #
+      # MODS does not require usage="primary", so the fallback fires often, and
+      # an unfiltered one let document order decide the record's title. It also
+      # decided which node an edit form wrote to: MODSMerge overwrites the node
+      # this returns, so an alternative title reached here was destroyed on the
+      # next title edit, leaving the record with no primary title at all. nil is
+      # the right answer instead -- MODSMerge creates a proper primary titleInfo
+      # from nil, and each variant is projected under its own field.
       def primary_title_info
         doc.at_xpath("/mods:mods/mods:titleInfo[@usage='primary']", NAMESPACE) ||
-          doc.at_xpath("/mods:mods/mods:titleInfo", NAMESPACE)
+          doc.xpath("/mods:mods/mods:titleInfo", NAMESPACE).reject { |ti| variant_title?(ti) }.first
+      end
+
+      # MODS enumerates titleInfo/@type as exactly abbreviated, translated,
+      # alternative and uniform -- every one of them a variant. So the presence
+      # of any @type marks a variant, which also keeps an unrecognised or
+      # misspelled value out of the write path rather than guessing at it.
+      def variant_title?(node)
+        !NEU::MODS.canonical_ws(node["type"].to_s).empty?
       end
 
       # All top-level <abstract> elements (MODS permits several).

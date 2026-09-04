@@ -48,11 +48,11 @@ RSpec.describe "Conformance: work-mods.xml projection" do
   it "projects the remaining scalar/array fields" do
     aggregate_failures do
       expect(projection[:languages]).to eq(["English"])
-      expect(projection[:resource_type]).to eq("sound recording")
+      expect(projection[:resource_type]).to eq(["sound recording"])
       expect(projection[:genres]).to eq(["podcasts"])
-      expect(projection[:format]).to eq("electronic")
-      expect(projection[:extent]).to eq("00:34:45")
-      expect(projection[:digital_origin]).to eq("born digital")
+      expect(projection[:format]).to eq(["electronic"])
+      expect(projection[:extent]).to eq(["00:34:45"])
+      expect(projection[:digital_origin]).to eq(["born digital"])
       expect(projection[:related_series]).to eq(["What's New Podcast"])
       expect(projection[:identifiers]).to eq(["http://hdl.handle.net/2047/D20254217"])
       expect(projection[:permanent_url]).to eq("http://hdl.handle.net/2047/D20254217")

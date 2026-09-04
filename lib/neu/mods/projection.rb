@@ -12,6 +12,8 @@ module NEU
     # Empty-value conventions mirror Atlas: scalar fields are "" when absent
     # (matching `.text.squish` on an empty node set), except `permanent_url` and
     # `date_created`, which are nil when their node is absent. Arrays are [].
+    # Which fields are scalar and which are arrays is declared in FIELDS, not
+    # left to each method to decide.
     module Projection
       # --- Title ---------------------------------------------------------------
 
@@ -148,10 +150,13 @@ module NEU
         end.compact
       end
 
-      def resource_type = text_at("/mods:mods/mods:typeOfResource")
-      def format = text_at("/mods:mods/mods:physicalDescription/mods:form")
-      def extent = text_at("/mods:mods/mods:physicalDescription/mods:extent")
-      def digital_origin = text_at("/mods:mods/mods:physicalDescription/mods:digitalOrigin")
+      # MODS repeats typeOfResource, and repeats physicalDescription (and form and
+      # extent within one), so all four are :many. A record that is both text and
+      # a still image used to project as text alone.
+      def resource_type = texts_at("/mods:mods/mods:typeOfResource")
+      def format = texts_at("/mods:mods/mods:physicalDescription/mods:form")
+      def extent = texts_at("/mods:mods/mods:physicalDescription/mods:extent")
+      def digital_origin = texts_at("/mods:mods/mods:physicalDescription/mods:digitalOrigin")
 
       def genres
         doc.xpath("/mods:mods/mods:genre", NAMESPACE).map { |g| clean(g.text) }
@@ -220,11 +225,11 @@ module NEU
         languages: :many,
         date_created: :one,
         date_created_precision: :one,
-        resource_type: :one,
+        resource_type: :many,
         genres: :many,
-        format: :one,
-        extent: :one,
-        digital_origin: :one,
+        format: :many,
+        extent: :many,
+        digital_origin: :many,
         abstract: :one,
         related_series: :many,
         topical_subjects: :many,
@@ -284,6 +289,12 @@ module NEU
       def text_at(xpath)
         node = doc.at_xpath(xpath, NAMESPACE)
         node ? NEU::MODS.canonical_ws(node.text) : ""
+      end
+
+      # The :many counterpart of #text_at. Blank members drop out rather than
+      # arriving as nil, so a consumer mapping over the array cannot trip on one.
+      def texts_at(xpath)
+        doc.xpath(xpath, NAMESPACE).filter_map { |node| clean(node.text) }
       end
 
       def child_text(parent, xpath)

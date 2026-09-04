@@ -159,7 +159,7 @@ RSpec.describe NEU::MODS::Document do
       aggregate_failures do
         expect(minimal.plain_title).to eq("Bare")
         expect(minimal.abstract).to eq("")
-        expect(minimal.resource_type).to eq("") # scalar absent -> "" (Atlas parity)
+        expect(minimal.resource_type).to eq([]) # repeatable, absent -> []
         expect(minimal.permanent_url).to be_nil # node absent -> nil (Atlas parity)
         expect(minimal.date_created).to be_nil
         expect(minimal.date_created_precision).to be_nil

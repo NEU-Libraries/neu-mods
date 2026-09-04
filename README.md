@@ -40,6 +40,11 @@ doc.date_created_with_precision
                    #    a day the record never claimed
 doc.to_h           # => full projection, keyed to Atlas's Metadata::MODS attributes
 
+# The field registry -- the single declaration of what this gem projects.
+# name => :one or :many. to_h is derived from it, and a consumer builds its own
+# schema from it rather than re-listing the field set by hand.
+NEU::MODS::FIELDS  # => { main_title: :one, names: :many, ... }
+
 # Pure title composition (no document needed) — for callers that already hold
 # the parts (e.g. Atlas's access-copy model) and must not re-parse XML on read.
 NEU::MODS.compose_title(non_sort: "", title: "What's New",

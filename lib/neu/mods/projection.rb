@@ -202,30 +202,47 @@ module NEU
 
       # --- Full projection -----------------------------------------------------
 
+      # The field registry: the single declaration of what this gem projects.
+      # Field name => cardinality, :one or :many. The projection method of the
+      # same name owns the XPath; this row says the field exists and whether it
+      # is single- or multi-valued. #to_h is derived from it, and Atlas derives
+      # its Metadata::MODS attr_json set from it, so a field cannot be projected
+      # here and go undeclared there (or the reverse).
+      #
+      # Cardinality is the half that earns its keep. The at_xpath-versus-xpath
+      # choice here and the single-versus-array column choice in Atlas used to be
+      # made independently in two repos with nothing tying them together, which is
+      # how repeatable MODS elements ended up truncated to their first match.
+      # #cardinality_of checks each method against its row.
+      FIELDS = {
+        main_title: :one,
+        names: :many,
+        languages: :many,
+        date_created: :one,
+        date_created_precision: :one,
+        resource_type: :one,
+        genres: :many,
+        format: :one,
+        extent: :one,
+        digital_origin: :one,
+        abstract: :one,
+        related_series: :many,
+        topical_subjects: :many,
+        identifiers: :many,
+        permanent_url: :one,
+        access_condition: :one
+      }.freeze
+
       # The complete read projection, keyed to Atlas's Metadata::MODS attribute
       # names -- a drop-in source for `convert_xml_to_json`.
       def to_h
-        date, date_precision = date_created_with_precision
-
-        {
-          main_title: access_title_parts,
-          names: names,
-          languages: languages,
-          date_created: date,
-          date_created_precision: date_precision,
-          resource_type: resource_type,
-          genres: genres,
-          format: format,
-          extent: extent,
-          digital_origin: digital_origin,
-          abstract: abstract,
-          related_series: related_series,
-          topical_subjects: topical_subjects,
-          identifiers: identifiers,
-          permanent_url: permanent_url,
-          access_condition: access_condition
-        }
+        FIELDS.keys.to_h { |field| [field, public_send(field)] }
       end
+
+      # The cardinality a projected value actually has, for checking a value
+      # against its FIELDS row. An Array is :many and anything else is :one, so a
+      # field declared :many that forgot to switch at_xpath for xpath is caught.
+      def self.cardinality_of(value) = value.is_a?(Array) ? :many : :one
 
       # The title parts as the access copy wants them: normalised like the
       # abstract, so a curly quote, an invisible format mark or a Windows-1252
@@ -234,6 +251,11 @@ module NEU
       def access_title_parts
         title_parts.transform_values { |value| NEU::MODS.normalize(value.to_s) }
       end
+
+      # Atlas names this field main_title; the registry requires a method per
+      # field name, and #access_title_parts is the descriptive name for what it
+      # returns. Kept as an alias rather than a rename so both read well.
+      def main_title = access_title_parts
 
       private
 

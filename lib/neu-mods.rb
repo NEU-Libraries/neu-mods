@@ -24,6 +24,12 @@ module NEU
     # The MODS v3 namespace, as a Nokogiri xpath namespace hash.
     NAMESPACE = { "mods" => "http://www.loc.gov/mods/v3" }.freeze
 
+    # The projected field set and its cardinality (see Projection::FIELDS),
+    # surfaced here so a consumer deriving its own schema from it -- Atlas's
+    # Metadata::MODS attr_json set -- reads the shared contract off the top-level
+    # module instead of reaching into a mixin.
+    FIELDS = Projection::FIELDS
+
     module_function
 
     # Whitespace no-op guard (see Canonicalize).

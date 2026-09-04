@@ -37,12 +37,20 @@ doc.date_created_with_precision
                    # => [DateTime, "year"|"month"|"day"]   w3cdtf YYYY, YYYY-MM
                    #    and YYYY-MM-DD all parse; the precision says which shape
                    #    the record declared, so display cannot invent a month or
-                   #    a day the record never claimed
+                   #    a day the record never claimed. Same for
+                   #    date_issued_with_precision and
+                   #    copyright_date_with_precision.
+doc.notes          # => [{ type: "funding", value: "..." }, ...]
+doc.related_items  # => [{ type: "otherFormat", title: "..." }, ...]
+                   #    every relatedItem that is not a series or a host
+doc.location       # => [{ physical_location:, shelf_location:, url: }, ...]
+doc.map_data       # => [{ scale:, projection:, coordinates: }, ...]
 doc.to_h           # => full projection, keyed to Atlas's Metadata::MODS attributes
 
 # The field registry -- the single declaration of what this gem projects.
 # name => :one or :many. to_h is derived from it, and a consumer builds its own
-# schema from it rather than re-listing the field set by hand.
+# schema from it rather than re-listing the field set by hand. Cardinality
+# follows what MODS marks repeatable, so a field can never silently truncate.
 NEU::MODS::FIELDS  # => { main_title: :one, names: :many, ... }
 
 # Pure title composition (no document needed) — for callers that already hold
@@ -109,6 +117,14 @@ intentional notes:
   text forms (the norm) are unaffected; code-only records would differ. Vendoring
   those lookup tables (or depending on `iso-639`) is deferred to keep the gem
   Nokogiri-only and small.
+- **`description` is not projected.** MODS has no element of that name, and the
+  two candidates — an `abstract` variant and `physicalDescription/note` —
+  describe different things. Projecting a guess would put wrong data in the
+  field rather than leave an empty one, so it waits on a decision.
+- **A date range is not projected.** `dateCreated`, `dateIssued` and
+  `copyrightDate` each project one value with its precision. A record that
+  ranges a date uses `point="start"` / `point="end"`, which needs a shape of its
+  own rather than a second array.
 
 ## Source convention
 

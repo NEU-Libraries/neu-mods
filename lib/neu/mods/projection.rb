@@ -299,32 +299,57 @@ module NEU
       # instead of being guessed after it.
       W3CDTF_DATE = /\A(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?\z/
 
-      # The three originInfo dates, each paired with the granularity the record
-      # declared, as [value, precision]. value is nil if the element is absent,
-      # or "" if present but unparseable (mirrors Atlas's safe_date_parse
-      # rescue). precision is "year", "month" or "day", and nil whenever value
-      # is not a DateTime.
-      #
-      # The precision has to be captured here, at the only point where the shape
-      # is still visible: a year-only date parses to January 1st, and no consumer
-      # downstream can tell that month and day from a record that claimed them.
-      # A preservation repository must not project a precision it was not given.
-      #
-      # These stay :one where the sibling originInfo elements are :many. MODS
-      # repeats them, but a date carries a precision alongside it, and an array
-      # of values paired with an array of precisions is a shape no consumer
-      # wants. A record that ranges its dates uses point="start"/"end", which is
-      # its own projection question rather than a cardinality one.
-      def date_created_with_precision = date_with_precision("dateCreated")
-      def date_issued_with_precision = date_with_precision("dateIssued")
-      def copyright_date_with_precision = date_with_precision("copyrightDate")
+      # What #date_parts returns when the element is absent entirely, so an
+      # absent date is distinguishable from one present and unparseable.
+      EMPTY_DATE = { value: nil, precision: nil, end_value: nil,
+                     end_precision: nil, qualifier: nil, key_date: nil }.freeze
 
-      def date_created = date_created_with_precision.first
-      def date_created_precision = date_created_with_precision.last
-      def date_issued = date_issued_with_precision.first
-      def date_issued_precision = date_issued_with_precision.last
-      def copyright_date = copyright_date_with_precision.first
-      def copyright_date_precision = copyright_date_with_precision.last
+      # Everything a record declared about one originInfo date, as
+      # { value:, precision:, end_value:, end_precision:, qualifier:, key_date: }.
+      #
+      # A date is not a scalar. Precision established that: a year-only date
+      # parses to January 1st, and no consumer downstream can tell that month
+      # and day from a record that claimed them. A range and a qualifier are the
+      # same kind of claim, and dropping them breaks the same rule -- a
+      # preservation repository must not project a value the record did not
+      # give. A ranged record was worse than that: #at_xpath took the first
+      # node, so one end of the range was PROMOTED to be the date, and the
+      # output was indistinguishable from a single certain year.
+      #
+      # The parts are projected as separate flat fields rather than one nested
+      # value, because the value half has three consumers that need a real date
+      # object -- a Solr sort key, a citation year and an OAI date.
+      def date_created_parts = date_parts("dateCreated")
+      def date_issued_parts = date_parts("dateIssued")
+      def copyright_date_parts = date_parts("copyrightDate")
+
+      def date_created = date_created_parts[:value]
+      def date_created_precision = date_created_parts[:precision]
+      def date_created_end = date_created_parts[:end_value]
+      def date_created_end_precision = date_created_parts[:end_precision]
+      def date_created_qualifier = date_created_parts[:qualifier]
+      def date_created_key_date = date_created_parts[:key_date]
+
+      def date_issued = date_issued_parts[:value]
+      def date_issued_precision = date_issued_parts[:precision]
+      def date_issued_end = date_issued_parts[:end_value]
+      def date_issued_end_precision = date_issued_parts[:end_precision]
+      def date_issued_qualifier = date_issued_parts[:qualifier]
+      def date_issued_key_date = date_issued_parts[:key_date]
+
+      def copyright_date = copyright_date_parts[:value]
+      def copyright_date_precision = copyright_date_parts[:precision]
+      def copyright_date_end = copyright_date_parts[:end_value]
+      def copyright_date_end_precision = copyright_date_parts[:end_precision]
+      def copyright_date_qualifier = copyright_date_parts[:qualifier]
+      def copyright_date_key_date = copyright_date_parts[:key_date]
+
+      # The [value, precision] pair the precision work introduced. Retained
+      # because it is the documented entry point for a caller that wants both
+      # halves and nothing else.
+      def date_created_with_precision = [date_created, date_created_precision]
+      def date_issued_with_precision = [date_issued, date_issued_precision]
+      def copyright_date_with_precision = [copyright_date, copyright_date_precision]
 
       # --- Full projection -----------------------------------------------------
 
@@ -355,12 +380,26 @@ module NEU
         # origin
         publication_information: :many,
         edition: :many,
+        # Six rows per originInfo date. Flat rather than one nested value,
+        # because the value half has consumers that need a real date object.
         date_created: :one,
         date_created_precision: :one,
+        date_created_end: :one,
+        date_created_end_precision: :one,
+        date_created_qualifier: :one,
+        date_created_key_date: :one,
         date_issued: :one,
         date_issued_precision: :one,
+        date_issued_end: :one,
+        date_issued_end_precision: :one,
+        date_issued_qualifier: :one,
+        date_issued_key_date: :one,
         copyright_date: :one,
         copyright_date_precision: :one,
+        copyright_date_end: :one,
+        copyright_date_end_precision: :one,
+        copyright_date_qualifier: :one,
+        copyright_date_key_date: :one,
 
         # physical description
         resource_type: :many,
@@ -442,14 +481,55 @@ module NEU
         ["", nil]
       end
 
-      def date_with_precision(element)
-        node = doc.at_xpath("/mods:mods/mods:originInfo/mods:#{element}", NAMESPACE)
+      # One originInfo date element, read by its attributes rather than by
+      # position. A record is free to write point="end" first, and taking the
+      # first node would then invert the range.
+      def date_parts(element)
+        nodes = doc.xpath("/mods:mods/mods:originInfo/mods:#{element}", NAMESPACE)
+        return EMPTY_DATE if nodes.empty?
+
+        start = nodes.find { |n| attr_value(n, "point") == "start" } ||
+                nodes.find { |n| attr_value(n, "point") != "end" }
+        finish = nodes.find { |n| attr_value(n, "point") == "end" }
+        date_entry(start, finish, nodes)
+      end
+
+      # The end point carries its OWN precision. "1935-06" to "1940" is legal,
+      # and reusing the start's granularity for both would assert something the
+      # end never claimed -- the precision bug in a new place.
+      #
+      # The qualifier falls back from the start to the end because v1's loader
+      # applied it to both points, and a record marking only one is still
+      # telling us the date is uncertain. An unrecognised value survives as
+      # itself: MODS enumerates approximate, inferred and questionable, but the
+      # record still said something.
+      def date_entry(start, finish, nodes)
+        value, precision = node_date(start)
+        end_value, end_precision = node_date(finish)
+        {
+          value: value,
+          precision: precision,
+          end_value: end_value,
+          end_precision: end_precision,
+          qualifier: attr_value(start, "qualifier") || attr_value(finish, "qualifier"),
+          key_date: nodes.any? { |n| attr_value(n, "keyDate") == "yes" }
+        }
+      end
+
+      def node_date(node)
         return [nil, nil] unless node
 
         str = NEU::MODS.canonical_ws(node.text)
         return [nil, nil] if str.empty?
 
         parse_w3cdtf(str)
+      end
+
+      def attr_value(node, name)
+        return nil unless node
+
+        value = NEU::MODS.canonical_ws(node[name].to_s)
+        value.empty? ? nil : value
       end
 
       # Byte-faithful title parts off any titleInfo node, shared by #title_parts

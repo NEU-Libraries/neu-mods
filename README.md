@@ -34,13 +34,17 @@ doc.abstract       # => normalized, paragraph-joined String
 doc.languages      # => ["English"]   a code-only <languageTerm>eng</> included
 doc.topical_subjects # => ["Civil society", ...]   (every <topic>, for the access copy)
 doc.keywords       # => [...]   (only the editable attribute-free keyword subjects)
-doc.date_created_with_precision
-                   # => [DateTime, "year"|"month"|"day"]   w3cdtf YYYY, YYYY-MM
-                   #    and YYYY-MM-DD all parse; the precision says which shape
-                   #    the record declared, so display cannot invent a month or
-                   #    a day the record never claimed. Same for
-                   #    date_issued_with_precision and
-                   #    copyright_date_with_precision.
+doc.date_created_parts
+                   # => { value:, precision:, end_value:, end_precision:,
+                   #      qualifier:, key_date: }   everything the record
+                   #    declared about one date. w3cdtf YYYY, YYYY-MM and
+                   #    YYYY-MM-DD all parse, and the precision says which
+                   #    shape it gave, so display cannot invent a month or a
+                   #    day. The points are read by @point, not by document
+                   #    order, and the end carries its OWN precision.
+                   #    Same for date_issued_parts and copyright_date_parts;
+                   #    each part is also a reader of its own, e.g.
+                   #    doc.date_created_qualifier.
 doc.notes          # => [{ type: "funding", value: "..." }, ...]
 doc.related_items  # => [{ type: "otherFormat", title: "..." }, ...]
                    #    every relatedItem that is not a series or a host
@@ -123,14 +127,17 @@ intentional notes:
   label vocabulary belongs to the consumer — Cerberus's edit form and Atlas's
   display word the same role differently. An unrecognised language code also
   stays raw, since the record still said something.
-- **`description` is not projected.** MODS has no element of that name, and the
-  two candidates — an `abstract` variant and `physicalDescription/note` —
-  describe different things. Projecting a guess would put wrong data in the
-  field rather than leave an empty one, so it waits on a decision.
-- **A date range is not projected.** `dateCreated`, `dateIssued` and
-  `copyrightDate` each project one value with its precision. A record that
-  ranges a date uses `point="start"` / `point="end"`, which needs a shape of its
-  own rather than a second array.
+- **`description` is not projected.** MODS does define `name/description`, but
+  that annotates a *name*, not the resource, so it is not the field Atlas once
+  called `description`. The two candidates for that one — an `abstract` variant
+  and `physicalDescription/note` — describe different things. Projecting a guess
+  would put wrong data in the field rather than leave an empty one, so it waits
+  on a decision.
+- **A date carries more than a value.** Each of `dateCreated`, `dateIssued` and
+  `copyrightDate` projects a value, its precision, an end value with its own
+  precision, the `@qualifier` and the `@keyDate` flag. The gem does not *pick*
+  the key date, because "which date to sort on" and "which date to display" are
+  not necessarily the same answer, and choosing is the consumer's job.
 
 ## Source convention
 

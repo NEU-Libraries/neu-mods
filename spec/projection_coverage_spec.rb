@@ -144,6 +144,21 @@ RSpec.describe "projection coverage" do
       end
     end
 
+    # The fixture carries a ranged, approximate dateCreated and nominates
+    # dateIssued as its key date, so a consumer of this record can be checked
+    # against all three attributes without inventing a document.
+    it "projects the range, the qualifier and the key date the record declares" do
+      aggregate_failures do
+        expect(doc.date_created).to eq(DateTime.new(1935, 6, 1))
+        expect(doc.date_created_precision).to eq("month")
+        expect(doc.date_created_end).to eq(DateTime.new(1940, 1, 1))
+        expect(doc.date_created_end_precision).to eq("year")
+        expect(doc.date_created_qualifier).to eq("approximate")
+        expect(doc.date_created_key_date).to be false
+        expect(doc.date_issued_key_date).to be true
+      end
+    end
+
     it "projects the edition" do
       expect(doc.edition).to eq(["2nd ed."])
     end

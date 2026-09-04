@@ -83,13 +83,17 @@ RSpec.describe NEU::MODS::Document do
   # same DateTime, and only the precision tells a display layer which one the
   # record actually claimed.
   describe "dateCreated granularity" do
-    def doc_with_date(date)
+    def doc_with_date(date, attrs: %(keyDate="yes"))
+      doc_with_origin_info(%(<mods:dateCreated #{attrs} encoding="w3cdtf">#{date}</mods:dateCreated>))
+    end
+
+    def doc_with_origin_info(body)
       described_class.parse(<<~XML)
         <?xml version="1.0" encoding="UTF-8"?>
         <mods:mods xmlns:mods="http://www.loc.gov/mods/v3">
           <mods:titleInfo usage="primary"><mods:title>Bare</mods:title></mods:titleInfo>
           <mods:originInfo>
-            <mods:dateCreated keyDate="yes" encoding="w3cdtf">#{date}</mods:dateCreated>
+            #{body}
           </mods:originInfo>
         </mods:mods>
       XML
@@ -136,6 +140,108 @@ RSpec.describe NEU::MODS::Document do
       aggregate_failures do
         expect(doc.date_created).to eq(DateTime.new(2026, 2, 1))
         expect(doc.date_created_precision).to eq("month")
+      end
+    end
+
+    # A cataloguer marked the date doubtful and the page stated it as fact.
+    # bdr_43888.mods.xml -- a real Brown record -- does exactly this.
+    it "keeps the qualifier the record put on the date" do
+      doc = doc_with_date("1930", attrs: %(qualifier="questionable"))
+      aggregate_failures do
+        expect(doc.date_created).to eq(DateTime.new(1930, 1, 1))
+        expect(doc.date_created_qualifier).to eq("questionable")
+      end
+    end
+
+    it "keeps an unrecognised qualifier, because the record still said something" do
+      expect(doc_with_date("1930", attrs: %(qualifier="guessed")).date_created_qualifier).to eq("guessed")
+    end
+
+    it "reports no qualifier when the record asserted certainty" do
+      expect(doc_with_date("1930", attrs: "").date_created_qualifier).to be_nil
+    end
+
+    # MODS lets a record nominate its own principal date. Both repos overruled
+    # it with a fixed preference order, which a preservation repository should
+    # not do.
+    it "reports the keyDate flag the record set" do
+      aggregate_failures do
+        expect(doc_with_date("1930", attrs: %(keyDate="yes")).date_created_key_date).to be true
+        expect(doc_with_date("1930", attrs: "").date_created_key_date).to be false
+        expect(described_class.parse("<mods:mods xmlns:mods=\"http://www.loc.gov/mods/v3\"/>")
+                              .date_created_key_date).to be_nil
+      end
+    end
+
+    # #at_xpath took the first node, so one end of a range was promoted to be
+    # THE date and the output was indistinguishable from a single certain year.
+    describe "a ranged date" do
+      let(:ranged) do
+        doc_with_origin_info(<<~XML)
+          <mods:dateCreated encoding="w3cdtf" point="start" qualifier="approximate">1935-06</mods:dateCreated>
+          <mods:dateCreated encoding="w3cdtf" point="end" qualifier="approximate">1940</mods:dateCreated>
+        XML
+      end
+
+      it "projects both ends, each with its own precision" do
+        aggregate_failures do
+          expect(ranged.date_created).to eq(DateTime.new(1935, 6, 1))
+          expect(ranged.date_created_precision).to eq("month")
+          expect(ranged.date_created_end).to eq(DateTime.new(1940, 1, 1))
+          expect(ranged.date_created_end_precision).to eq("year")
+        end
+      end
+
+      it "carries the qualifier that says both ends are guesses" do
+        expect(ranged.date_created_qualifier).to eq("approximate")
+      end
+
+      # A record is free to write the end first; taking the first node would
+      # then invert the range.
+      it "reads the points by attribute, not by document order" do
+        inverted = doc_with_origin_info(<<~XML)
+          <mods:dateCreated point="end">1940</mods:dateCreated>
+          <mods:dateCreated point="start">1935</mods:dateCreated>
+        XML
+
+        aggregate_failures do
+          expect(inverted.date_created).to eq(DateTime.new(1935, 1, 1))
+          expect(inverted.date_created_end).to eq(DateTime.new(1940, 1, 1))
+        end
+      end
+
+      it "leaves the end empty for a single unpointed date" do
+        single = doc_with_date("1935", attrs: "")
+        aggregate_failures do
+          expect(single.date_created).to eq(DateTime.new(1935, 1, 1))
+          expect(single.date_created_end).to be_nil
+          expect(single.date_created_end_precision).to be_nil
+        end
+      end
+
+      it "takes the qualifier from the end when only the end carries one" do
+        doc = doc_with_origin_info(<<~XML)
+          <mods:dateCreated point="start">1935</mods:dateCreated>
+          <mods:dateCreated point="end" qualifier="inferred">1940</mods:dateCreated>
+        XML
+
+        expect(doc.date_created_qualifier).to eq("inferred")
+      end
+    end
+
+    it "applies the same shape to the other two originInfo dates" do
+      doc = doc_with_origin_info(<<~XML)
+        <mods:dateIssued keyDate="yes" point="start" qualifier="approximate">1935</mods:dateIssued>
+        <mods:dateIssued point="end">1940</mods:dateIssued>
+        <mods:copyrightDate>1936</mods:copyrightDate>
+      XML
+
+      aggregate_failures do
+        expect(doc.date_issued_end).to eq(DateTime.new(1940, 1, 1))
+        expect(doc.date_issued_qualifier).to eq("approximate")
+        expect(doc.date_issued_key_date).to be true
+        expect(doc.copyright_date).to eq(DateTime.new(1936, 1, 1))
+        expect(doc.copyright_date_key_date).to be false
       end
     end
 

@@ -31,6 +31,7 @@ doc.plain_title    # => "What's New - How We Respond to Disaster, Episode 1"
 doc.title_parts    # => { non_sort:, subtitle:, title:, part_name:, part_number: }
                    #    byte-faithful -- the edit forms pre-fill from these
 doc.abstract       # => normalized, paragraph-joined String
+doc.languages      # => ["English"]   a code-only <languageTerm>eng</> included
 doc.topical_subjects # => ["Civil society", ...]   (every <topic>, for the access copy)
 doc.keywords       # => [...]   (only the editable attribute-free keyword subjects)
 doc.date_created_with_precision
@@ -112,11 +113,16 @@ intentional notes:
   its quirks* (e.g. multiple `given` nameParts concatenate with no separator),
   to preserve existing Solr/display output. Cleanups are a deliberate future
   contract change, not a silent one.
-- **Roles & languages** read the `type="text"` term and fall back to the **raw
-  code** — they are *not* MARC-relator / ISO-639 translated. Records carrying
-  text forms (the norm) are unaffected; code-only records would differ. Vendoring
-  those lookup tables (or depending on `iso-639`) is deferred to keep the gem
-  Nokogiri-only and small.
+- **Languages are translated; roles are not.** Both read the `type="text"` term
+  first. A code-only `languageTerm` is then translated through the vendored ISO
+  639 registry (`lib/neu/mods/data/iso639-2.txt`, from the Library of Congress),
+  so `eng` projects `English`. That happens here rather than in a consumer's
+  display layer because otherwise Solr indexes `eng` while the page shows
+  `English`, and the language facet reads in codes.
+  A code-only `roleTerm` stays raw. A MARC relator is a display *label*, and the
+  label vocabulary belongs to the consumer — Cerberus's edit form and Atlas's
+  display word the same role differently. An unrecognised language code also
+  stays raw, since the record still said something.
 - **`description` is not projected.** MODS has no element of that name, and the
   two candidates — an `abstract` variant and `physicalDescription/note` —
   describe different things. Projecting a guess would put wrong data in the

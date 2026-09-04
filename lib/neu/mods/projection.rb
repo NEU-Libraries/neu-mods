@@ -168,12 +168,18 @@ module NEU
 
       # --- Scalars / simple arrays --------------------------------------------
 
+      # Prefer the type="text" term, and translate a code-only one through the
+      # ISO 639 registry. A record saying `eng` projects "English", so the
+      # display and the Solr language facet read the same value rather than the
+      # facet showing codes. An unrecognised code survives as itself.
       def languages
-        doc.xpath("/mods:mods/mods:language", NAMESPACE).map do |lang|
-          term = lang.at_xpath("mods:languageTerm[@type='text']", NAMESPACE) ||
-                 lang.at_xpath("mods:languageTerm", NAMESPACE)
-          clean(term&.text)
-        end.compact
+        doc.xpath("/mods:mods/mods:language", NAMESPACE).filter_map do |lang|
+          text = lang.at_xpath("mods:languageTerm[@type='text']", NAMESPACE)
+          next clean(text.text) if text
+
+          code = clean(lang.at_xpath("mods:languageTerm", NAMESPACE)&.text)
+          code && LanguageCodes.term(code)
+        end
       end
 
       # MODS repeats typeOfResource, and repeats physicalDescription (and form and

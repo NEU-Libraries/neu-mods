@@ -36,7 +36,7 @@ RSpec.describe "projection coverage" do
       XML
 
       aggregate_failures do
-        expect(repeated.format).to eq(["electronic", "print"])
+        expect(repeated.format).to eq(%w[electronic print])
         expect(repeated.extent).to eq(["24 pages", "1 box"])
         expect(repeated.digital_origin).to eq(["born digital", "reformatted digital"])
       end
@@ -45,6 +45,38 @@ RSpec.describe "projection coverage" do
     it "drops a blank member rather than projecting nil into the array" do
       expect(doc_with("<mods:typeOfResource>text</mods:typeOfResource><mods:typeOfResource> </mods:typeOfResource>")
                .resource_type).to eq(["text"])
+    end
+  end
+
+  describe "accessCondition is projected per @type" do
+    it "keeps a restriction and a licence apart" do
+      aggregate_failures do
+        expect(doc.restriction_on_access).to eq("Northeastern University only.")
+        expect(doc.use_and_reproduction).to eq("CC BY 4.0")
+      end
+    end
+
+    it "still projects the combined value, which alone carries an untyped one" do
+      aggregate_failures do
+        expect(doc.access_condition).to eq("Northeastern University only.\n\nCC BY 4.0")
+        untyped = doc_with("<mods:accessCondition>No known restrictions.</mods:accessCondition>")
+        expect(untyped.access_condition).to eq("No known restrictions.")
+        expect(untyped.use_and_reproduction).to eq("")
+        expect(untyped.restriction_on_access).to eq("")
+      end
+    end
+
+    it "matches the @type case-insensitively, as the schema leaves it open" do
+      expect(doc_with(%(<mods:accessCondition type="Use And Reproduction">CC BY 4.0</mods:accessCondition>))
+               .use_and_reproduction).to eq("CC BY 4.0")
+    end
+
+    it "joins several conditions of one type as paragraphs" do
+      several = doc_with(<<~XML)
+        <mods:accessCondition type="use and reproduction">CC BY 4.0</mods:accessCondition>
+        <mods:accessCondition type="use and reproduction">Attribution required.</mods:accessCondition>
+      XML
+      expect(several.use_and_reproduction).to eq("CC BY 4.0\n\nAttribution required.")
     end
   end
 end

@@ -88,9 +88,20 @@ module NEU
         join_paragraphs(abstract_nodes)
       end
 
+      # Every top-level accessCondition joined, regardless of @type. Retained
+      # because it is the only projection that carries an untyped or
+      # unrecognised accessCondition, which the two typed fields below cannot
+      # see -- a consumer that renders only those needs this as its fallback.
       def access_condition
         join_paragraphs(doc.xpath("/mods:mods/mods:accessCondition", NAMESPACE))
       end
+
+      # The two @type values MODS defines, projected apart. Collapsing them into
+      # one value presented an access *restriction* to a reader as a *licence*,
+      # which is the one defect in this area that misinforms someone about their
+      # rights rather than merely hiding a field.
+      def use_and_reproduction = access_conditions_of_type("use and reproduction")
+      def restriction_on_access = access_conditions_of_type("restriction on access")
 
       # --- Subjects ------------------------------------------------------------
 
@@ -235,7 +246,9 @@ module NEU
         topical_subjects: :many,
         identifiers: :many,
         permanent_url: :one,
-        access_condition: :one
+        access_condition: :one,
+        use_and_reproduction: :one,
+        restriction_on_access: :one
       }.freeze
 
       # The complete read projection, keyed to Atlas's Metadata::MODS attribute
@@ -319,6 +332,15 @@ module NEU
       # (an empty given/family/org renders as an empty input, not a dropped key).
       def clean_part(str)
         NEU::MODS.canonical_ws(str)
+      end
+
+      # The schema leaves accessCondition/@type an open string, so match on the
+      # canonicalised, case-folded value rather than in the XPath: real records
+      # carry "Use and Reproduction" as readily as the MODS-recommended casing.
+      def access_conditions_of_type(type)
+        nodes = doc.xpath("/mods:mods/mods:accessCondition", NAMESPACE)
+                   .select { |node| NEU::MODS.canonical_ws(node["type"].to_s).downcase == type }
+        join_paragraphs(nodes)
       end
 
       def join_paragraphs(nodes)

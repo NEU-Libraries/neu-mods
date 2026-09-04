@@ -76,12 +76,11 @@ RSpec.describe "Conformance: work-mods.xml projection" do
     expect(ac).to end_with("\n\nCopyright restrictions may apply.")
   end
 
+  # The key set is the registry's, not a second hand-maintained list -- keeping
+  # one here is how the two drifted apart in the first place. What this asserts
+  # is that a real record exercises the whole registry, not just that the keys
+  # exist. See fields_spec.rb for the registry's own contract.
   it "keys to_h to Atlas's Metadata::MODS attribute names" do
-    expect(projection.keys).to contain_exactly(
-      :main_title, :names, :languages, :date_created, :date_created_precision,
-      :resource_type, :genres, :format, :extent, :digital_origin, :abstract,
-      :related_series, :topical_subjects, :identifiers, :permanent_url,
-      :access_condition
-    )
+    expect(projection.keys).to eq(NEU::MODS::FIELDS.keys)
   end
 end

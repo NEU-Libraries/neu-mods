@@ -25,9 +25,9 @@ RSpec.describe "Conformance: work-mods.xml projection" do
   it "reproduces the mods-gem name display_value_w_date (quirks included)" do
     expect(projection[:names]).to eq(
       [
-        { name: "Cohen, Daniel J.(Daniel Jared), 1968-", role: "Creator", affiliation: [] },
-        { name: "Northeastern University (Boston, Mass.) Libraries", role: "Creator", affiliation: [] },
-        { name: "Flynn, Stephen E.", role: "Contributor", affiliation: [] }
+        { name: "Cohen, Daniel J.(Daniel Jared), 1968-", roles: ["Creator"], affiliation: [] },
+        { name: "Northeastern University (Boston, Mass.) Libraries", roles: ["Creator"], affiliation: [] },
+        { name: "Flynn, Stephen E.", roles: ["Contributor"], affiliation: [] }
       ]
     )
   end

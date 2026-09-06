@@ -80,7 +80,7 @@ doc.to_xml
 # node selection (for replace-on-save), and structure-aware build.
 doc.editable_personal_creators   # => [{ given:, family: }]  (plain, Creator role)
 doc.editable_corporate_creators  # => [{ name: }]
-doc.preserved_names              # => [{ name:, role: }]  (authority-bearing / non-Creator — read-only)
+doc.preserved_names              # => [{ name:, roles: }]  (authority-bearing / non-Creator — read-only)
 doc.editable_creator_nodes("personal")            # => live <name> nodes to replace
 doc.build_personal_name(given: "Jenny", family: "Smith")      # => a plain personal <name> node
 doc.build_corporate_name(name: "Northeastern University")     # => a plain corporate <name> node

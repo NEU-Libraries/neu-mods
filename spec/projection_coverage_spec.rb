@@ -367,6 +367,41 @@ RSpec.describe "projection coverage" do
       expect(doc_with(%(<mods:identifier type="hdl"></mods:identifier>)).identifiers).to eq([])
     end
 
+    it "keeps every role on a name, since MODS repeats the element" do
+      two_roles = doc_with(<<~XML)
+        <mods:name type="personal">
+          <mods:namePart>Doe, Jane</mods:namePart>
+          <mods:role><mods:roleTerm type="text">Creator</mods:roleTerm></mods:role>
+          <mods:role><mods:roleTerm type="text">Contributor</mods:roleTerm></mods:role>
+        </mods:name>
+      XML
+      expect(two_roles.names.first[:roles]).to eq(%w[Creator Contributor])
+    end
+
+    it "gives a name with no role an empty list, not a nil member" do
+      expect(doc_with("<mods:name><mods:namePart>Anon</mods:namePart></mods:name>")
+               .names.first[:roles]).to eq([])
+    end
+
+    # The simple form writes one Creator role back, so it must not claim a name
+    # carrying roles it cannot represent -- saving would drop them from the
+    # preservation XML.
+    it "leaves the editable-creator boundary on the first role, not on any role" do
+      second_role_creator = doc_with(<<~XML)
+        <mods:name type="personal">
+          <mods:namePart type="given">Jen</mods:namePart>
+          <mods:namePart type="family">Bell</mods:namePart>
+          <mods:role><mods:roleTerm type="text">Editor</mods:roleTerm></mods:role>
+          <mods:role><mods:roleTerm type="text">Creator</mods:roleTerm></mods:role>
+        </mods:name>
+      XML
+      aggregate_failures do
+        expect(second_role_creator.editable_personal_creators).to eq([])
+        expect(second_role_creator.preserved_names)
+          .to eq([{ name: "Bell, Jen", roles: %w[Editor Creator], affiliation: [] }])
+      end
+    end
+
     # How a reader tells one J. Doe from another, and the basis of any future
     # department browse.
     it "projects a name's affiliations, which repeat in the schema" do
@@ -380,7 +415,7 @@ RSpec.describe "projection coverage" do
         </mods:name>
       XML
 
-      expect(doc.names).to eq([{ name: "Doe, Jane", role: "Creator",
+      expect(doc.names).to eq([{ name: "Doe, Jane", roles: ["Creator"],
                                  affiliation: ["Department of Physics", "Northeastern University"] }])
     end
 

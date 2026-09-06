@@ -177,15 +177,17 @@ module NEU
       def name_entry(node)
         {
           name: name_display_value_w_date(node),
-          role: name_role(node),
+          roles: name_roles(node),
           affiliation: texts_under(node, "mods:affiliation")
         }
       end
 
-      # All top-level names as { name:, role: }. `name` reproduces the `mods` gem's
+      # All top-level names as { name:, roles: }. `name` reproduces the `mods` gem's
       # display_value_w_date (including its quirks -- faithfully, so existing Solr/
-      # display output is preserved). `role` prefers the type="text" roleTerm,
-      # falling back to the raw code (NOT MARC-relator-translated -- see README).
+      # display output is preserved). MODS repeats `role` on one name, and a
+      # cataloguer who records that a person both wrote and edited a work means
+      # both. Each term prefers the type="text" roleTerm, falling back to the raw
+      # code (NOT MARC-relator-translated -- see README).
       def names
         doc.xpath("/mods:mods/mods:name", NAMESPACE).map { |node| name_entry(node) }
       end
@@ -205,7 +207,7 @@ module NEU
 
       # Names the editable form does NOT manage (authority-bearing or non-Creator)
       # -- for read-only display ("these exist; edit via the XML tab"). Composed
-      # display string + role, like #names but filtered to the preserved set.
+      # display string + roles, like #names but filtered to the preserved set.
       def preserved_names
         doc.xpath("/mods:mods/mods:name", NAMESPACE)
            .reject { |node| editable_creator_name?(node) }
@@ -815,13 +817,15 @@ module NEU
             .map(&:text).join(" ")
       end
 
-      def name_role(node)
-        node.xpath("mods:role", NAMESPACE).each do |role|
-          val = role_term_value(role)
-          return val if val
-        end
-        nil
+      def name_roles(node)
+        node.xpath("mods:role", NAMESPACE).filter_map { |role| role_term_value(role) }
       end
+
+      # The first declared role, which is what decides whether the simple edit
+      # form owns a name. Deliberately not #name_roles.include?("Creator"):
+      # widening it would hand the form a name whose other roles it cannot
+      # represent, and saving would drop them from the preservation XML.
+      def name_role(node) = name_roles(node).first
 
       # Prefer the type="text" roleTerm; fall back to the raw type="code" term
       # (NOT MARC-relator-translated -- see README). nil if neither is present.

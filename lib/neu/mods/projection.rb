@@ -114,6 +114,26 @@ module NEU
         keyword_subjects.flat_map { |s| s.xpath("mods:topic", NAMESPACE).map { |t| t.text.strip } }
       end
 
+      # Neither child carries heading text: cartographics is a structured
+      # coordinate a reader reaches through #map_data, and geographicCode is a
+      # MARC code rather than a place name.
+      HEADING_OMITTED_CHILDREN = %w[cartographics geographicCode].freeze
+
+      # Every top-level <subject> as ONE heading, its parts in document order.
+      # A pre-coordinated heading like "Salt marshes--Massachusetts--20th
+      # century" is a single statement, and the per-axis fields below cannot say
+      # which parts belonged together: they pool every topic on the record into
+      # one list, so a fragment of a heading and a whole heading read alike.
+      #
+      # Kept in parts rather than joined. The separator is display policy, the
+      # same call #map_data makes for cartographics.
+      def subject_headings
+        doc.xpath("/mods:mods/mods:subject", NAMESPACE).filter_map do |node|
+          parts = subject_heading_parts(node)
+          { parts: parts } unless parts.empty?
+        end
+      end
+
       # Every <topic> under any top-level <subject> (the access-copy projection,
       # equivalent to Atlas's extract_topical_subjects).
       def topical_subjects = texts_at("/mods:mods/mods:subject/mods:topic")
@@ -146,10 +166,7 @@ module NEU
       # any other titleInfo, so it composes through the same port as the main
       # title rather than taking titleInfo/title alone.
       def title_subjects
-        doc.xpath("/mods:mods/mods:subject/mods:titleInfo", NAMESPACE).filter_map do |node|
-          parts = title_parts_of(node).transform_values { |value| NEU::MODS.normalize(value.to_s) }
-          clean(Projection.compose_title(parts))
-        end
+        doc.xpath("/mods:mods/mods:subject/mods:titleInfo", NAMESPACE).filter_map { |node| composed_title_of(node) }
       end
 
       # Kept structured for the reason #map_data is. Flattening country / state
@@ -522,6 +539,7 @@ module NEU
         table_of_contents: :many,
 
         # subjects
+        subject_headings: :many,
         topical_subjects: :many,
         geographic_subjects: :many,
         temporal_subjects: :many,
@@ -666,6 +684,13 @@ module NEU
       # A variant title composed the way the access copy wants it: normalised
       # first, like #access_title_parts, so a curly quote or an invisible format
       # mark cannot reach Solr or a display template through this route either.
+      # One titleInfo composed the way the access copy wants it, shared by the
+      # subject-title axis and the assembled heading so the two cannot drift.
+      def composed_title_of(node)
+        parts = title_parts_of(node).transform_values { |value| NEU::MODS.normalize(value.to_s) }
+        clean(Projection.compose_title(parts))
+      end
+
       def variant_titles(type)
         doc.xpath("/mods:mods/mods:titleInfo[@type='#{type}']", NAMESPACE).filter_map do |node|
           parts = title_parts_of(node).transform_values { |value| NEU::MODS.normalize(value.to_s) }
@@ -676,6 +701,33 @@ module NEU
       def name_subjects(type)
         doc.xpath("/mods:mods/mods:subject/mods:name[@type='#{type}']", NAMESPACE)
            .filter_map { |node| name_display_value_w_date(node) }
+      end
+
+      def subject_heading_parts(node)
+        node.xpath("mods:*", NAMESPACE).flat_map { |child| subject_heading_part(child) }.compact
+      end
+
+      def subject_heading_part(child)
+        return [] if HEADING_OMITTED_CHILDREN.include?(child.name)
+
+        case child.name
+        when "name" then [name_display_value_w_date(child)]
+        when "titleInfo" then [composed_title_of(child)]
+        # Each level is its own part, so a hierarchical place reads as the steps
+        # of the heading rather than as one run-together string.
+        when "hierarchicalGeographic" then child.xpath("mods:*", NAMESPACE).map { |level| clean(level.text) }
+        else split_heading_text(clean(child.text))
+        end
+      end
+
+      # A cataloguer who typed a whole heading into one element as "A--B--C"
+      # made the same statement as one who structured it into siblings, so both
+      # arrive here as the same parts.
+      def split_heading_text(text)
+        return [] if text.nil?
+        return [text] unless text.include?("--")
+
+        text.split("--").filter_map { |part| clean(part) }
       end
 
       def related_item_titles(type)

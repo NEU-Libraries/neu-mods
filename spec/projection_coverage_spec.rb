@@ -192,6 +192,94 @@ RSpec.describe "projection coverage" do
       end
     end
 
+    describe "the assembled subject heading" do
+      it "keeps one pre-coordinated heading together, in document order" do
+        lcsh = doc_with(<<~XML)
+          <mods:subject authority="lcsh">
+            <mods:topic>Salt marshes</mods:topic>
+            <mods:geographic>Massachusetts</mods:geographic>
+            <mods:temporal>20th century</mods:temporal>
+          </mods:subject>
+          <mods:subject authority="lcsh"><mods:topic>Coastal ecology</mods:topic></mods:subject>
+        XML
+        expect(lcsh.subject_headings).to eq([
+                                              { parts: ["Salt marshes", "Massachusetts", "20th century"] },
+                                              { parts: ["Coastal ecology"] }
+                                            ])
+      end
+
+      it "reads a heading typed flat into one element as the same parts" do
+        flat = doc_with(<<~XML)
+          <mods:subject><mods:topic>Salt marshes--Massachusetts--20th century</mods:topic></mods:subject>
+        XML
+        expect(flat.subject_headings).to eq([{ parts: ["Salt marshes", "Massachusetts", "20th century"] }])
+      end
+
+      it "composes a name and a title part through their own display ports" do
+        composed = doc_with(<<~XML)
+          <mods:subject>
+            <mods:name type="personal">
+              <mods:namePart type="family">Bell</mods:namePart>
+              <mods:namePart type="given">Jen</mods:namePart>
+            </mods:name>
+            <mods:topic>Correspondence</mods:topic>
+          </mods:subject>
+          <mods:subject>
+            <mods:titleInfo><mods:nonSort>The</mods:nonSort><mods:title>Real Thing</mods:title></mods:titleInfo>
+          </mods:subject>
+        XML
+        expect(composed.subject_headings).to eq([
+                                                  { parts: ["Bell, Jen", "Correspondence"] },
+                                                  { parts: ["The Real Thing"] }
+                                                ])
+      end
+
+      it "makes each hierarchical level a step of the heading" do
+        place = doc_with(<<~XML)
+          <mods:subject>
+            <mods:hierarchicalGeographic>
+              <mods:country>United States</mods:country>
+              <mods:state>New York</mods:state>
+              <mods:city>Parksville</mods:city>
+            </mods:hierarchicalGeographic>
+          </mods:subject>
+        XML
+        expect(place.subject_headings).to eq([{ parts: ["United States", "New York", "Parksville"] }])
+      end
+
+      it "omits the two children that carry no heading text" do
+        omitted = doc_with(<<~XML)
+          <mods:subject>
+            <mods:topic>Boston</mods:topic>
+            <mods:geographicCode authority="marcgac">n-us-ma</mods:geographicCode>
+            <mods:cartographics><mods:coordinates>42.36,-71.06</mods:coordinates></mods:cartographics>
+          </mods:subject>
+        XML
+        expect(omitted.subject_headings).to eq([{ parts: ["Boston"] }])
+      end
+
+      it "drops a subject whose children are all blank or omitted" do
+        empty = doc_with(<<~XML)
+          <mods:subject><mods:topic></mods:topic></mods:subject>
+          <mods:subject><mods:geographicCode>n-us-ma</mods:geographicCode></mods:subject>
+        XML
+        expect(empty.subject_headings).to eq([])
+      end
+
+      it "leaves the per-axis fields alone, since the facets read them" do
+        lcsh = doc_with(<<~XML)
+          <mods:subject>
+            <mods:topic>Salt marshes</mods:topic>
+            <mods:geographic>Massachusetts</mods:geographic>
+          </mods:subject>
+        XML
+        aggregate_failures do
+          expect(lcsh.topical_subjects).to eq(["Salt marshes"])
+          expect(lcsh.geographic_subjects).to eq(["Massachusetts"])
+        end
+      end
+    end
+
     it "projects subject/occupation, the last member of the subject set" do
       occupations = doc_with(<<~XML)
         <mods:subject><mods:occupation>Cabinetmakers</mods:occupation></mods:subject>

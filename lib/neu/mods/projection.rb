@@ -306,7 +306,18 @@ module NEU
       end
 
       def related_series = related_item_titles("series")
-      def host_collections = related_item_titles("host")
+
+      # The host's title plus THIS work's position within it. The host's own
+      # name, originInfo and identifier stay out: they belong to the other
+      # record, and a transcribed copy goes stale the moment that record is
+      # edited. A part is the exception, because a volume, issue and page range
+      # describe this article and no other record holds that fact.
+      def host_collections
+        doc.xpath("/mods:mods/mods:relatedItem[@type='host']", NAMESPACE).filter_map do |node|
+          title = child_text(node, "mods:titleInfo/mods:title")
+          { title: title, **host_part(node) } if title
+        end
+      end
 
       # relatedItem @type values that already have a field of their own, so the
       # catch-all below does not repeat them.
@@ -659,6 +670,23 @@ module NEU
 
       def related_item_titles(type)
         texts_at("/mods:mods/mods:relatedItem[@type='#{type}']/mods:titleInfo/mods:title")
+      end
+
+      # Kept in parts rather than composed into "24(3), pp. 210-218". The
+      # punctuation of a citation is display policy, the same call #map_data
+      # makes for cartographics. MODS leaves @unit optional, so a page extent
+      # without one is read rather than dropped.
+      def host_part(node)
+        part = node.at_xpath("mods:part", NAMESPACE)
+        return {} if part.nil?
+
+        pages = "mods:extent[@unit='page' or not(@unit)]"
+        {
+          volume: child_text(part, "mods:detail[@type='volume']/mods:number"),
+          issue: child_text(part, "mods:detail[@type='issue']/mods:number"),
+          start_page: child_text(part, "#{pages}/mods:start"),
+          end_page: child_text(part, "#{pages}/mods:end")
+        }.compact
       end
 
       def text_at(xpath)

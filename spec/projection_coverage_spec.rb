@@ -205,9 +205,54 @@ RSpec.describe "projection coverage" do
 
     it "projects the host collection alongside the series" do
       aggregate_failures do
-        expect(doc.host_collections).to eq(["A Host Collection"])
+        expect(doc.host_collections).to eq([{ title: "A Host Collection" }])
         expect(doc.related_series).to eq(["A Series"])
       end
+    end
+
+    it "carries this work's position in its host, which no other record holds" do
+      article = doc_with(<<~XML)
+        <mods:relatedItem type="host">
+          <mods:titleInfo><mods:title>Estuaries</mods:title></mods:titleInfo>
+          <mods:part>
+            <mods:detail type="volume"><mods:number>24</mods:number></mods:detail>
+            <mods:detail type="issue"><mods:number>3</mods:number></mods:detail>
+            <mods:extent unit="page"><mods:start>210</mods:start><mods:end>218</mods:end></mods:extent>
+          </mods:part>
+        </mods:relatedItem>
+      XML
+      expect(article.host_collections).to eq([{ title: "Estuaries", volume: "24", issue: "3",
+                                                start_page: "210", end_page: "218" }])
+    end
+
+    it "reads a page extent that omits @unit, which MODS leaves optional" do
+      unitless = doc_with(<<~XML)
+        <mods:relatedItem type="host">
+          <mods:titleInfo><mods:title>Estuaries</mods:title></mods:titleInfo>
+          <mods:part><mods:extent><mods:start>210</mods:start></mods:extent></mods:part>
+        </mods:relatedItem>
+      XML
+      expect(unitless.host_collections).to eq([{ title: "Estuaries", start_page: "210" }])
+    end
+
+    it "omits the part members a record does not carry rather than nilling them" do
+      volume_only = doc_with(<<~XML)
+        <mods:relatedItem type="host">
+          <mods:titleInfo><mods:title>Estuaries</mods:title></mods:titleInfo>
+          <mods:part><mods:detail type="volume"><mods:number>24</mods:number></mods:detail></mods:part>
+        </mods:relatedItem>
+      XML
+      expect(volume_only.host_collections).to eq([{ title: "Estuaries", volume: "24" }])
+    end
+
+    it "keeps the part out of a series, which has no volume or page range" do
+      series = doc_with(<<~XML)
+        <mods:relatedItem type="series">
+          <mods:titleInfo><mods:title>A Series</mods:title></mods:titleInfo>
+          <mods:part><mods:detail type="volume"><mods:number>9</mods:number></mods:detail></mods:part>
+        </mods:relatedItem>
+      XML
+      expect(series.related_series).to eq(["A Series"])
     end
 
     it "catches every other relatedItem type, keeping the relationship" do

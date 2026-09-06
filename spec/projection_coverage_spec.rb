@@ -347,6 +347,78 @@ RSpec.describe "projection coverage" do
       expect(volume_only.host_collections).to eq([{ title: "Estuaries", volume: "24" }])
     end
 
+    # A host block carrying volume, issue and pages but no titleInfo used to
+    # project nothing, discarding the one piece of it that describes this work
+    # along with the metadata that belongs to the other record.
+    it "keeps a host that carries a part and no title" do
+      titleless = doc_with(<<~XML)
+        <mods:relatedItem type="host">
+          <mods:part>
+            <mods:detail type="issue"><mods:number>3</mods:number></mods:detail>
+          </mods:part>
+        </mods:relatedItem>
+      XML
+      expect(titleless.host_collections).to eq([{ title: nil, issue: "3" }])
+    end
+
+    it "drops a host that carries neither a title nor a part" do
+      empty = doc_with('<mods:relatedItem type="host"><mods:note>Nothing</mods:note></mods:relatedItem>')
+      expect(empty.host_collections).to eq([])
+    end
+
+    # part/date is the article's year within the host -- after the title, the
+    # element a reader most needs to find the article offline.
+    it "reads the part's date and text, which reached no consumer before" do
+      dated = doc_with(<<~XML)
+        <mods:relatedItem type="host">
+          <mods:titleInfo><mods:title>Estuaries</mods:title></mods:titleInfo>
+          <mods:part>
+            <mods:date>1998</mods:date>
+            <mods:text>Special issue</mods:text>
+          </mods:part>
+        </mods:relatedItem>
+      XML
+      expect(dated.host_collections)
+        .to eq([{ title: "Estuaries", date: "1998", text: "Special issue" }])
+    end
+
+    # detail/@type is an open xs:string, so a named key per type cannot cover
+    # the vocabulary. The caption travels because it is the label a cataloguer
+    # wrote for the number.
+    it "keeps every detail type beyond volume and issue, with its caption" do
+      chaptered = doc_with(<<~XML)
+        <mods:relatedItem type="host">
+          <mods:titleInfo><mods:title>Salt Marshes</mods:title></mods:titleInfo>
+          <mods:part>
+            <mods:detail type="volume"><mods:number>2</mods:number></mods:detail>
+            <mods:detail type="chapter">
+              <mods:caption>chap.</mods:caption>
+              <mods:number>7</mods:number>
+              <mods:title>Tidal Range</mods:title>
+            </mods:detail>
+          </mods:part>
+        </mods:relatedItem>
+      XML
+      expect(chaptered.host_collections)
+        .to eq([{ title: "Salt Marshes", volume: "2",
+                  details: [{ type: "chapter", number: "7", caption: "chap.", title: "Tidal Range" }] }])
+    end
+
+    it "carries an extent at a unit other than page, unit and all" do
+      recording = doc_with(<<~XML)
+        <mods:relatedItem type="host">
+          <mods:titleInfo><mods:title>Field Recordings</mods:title></mods:titleInfo>
+          <mods:part>
+            <mods:extent unit="page"><mods:start>1</mods:start></mods:extent>
+            <mods:extent unit="minutes"><mods:start>0</mods:start><mods:end>45</mods:end></mods:extent>
+          </mods:part>
+        </mods:relatedItem>
+      XML
+      expect(recording.host_collections)
+        .to eq([{ title: "Field Recordings", start_page: "1",
+                  extents: [{ unit: "minutes", start: "0", end: "45", total: nil, list: nil }] }])
+    end
+
     it "keeps the part out of a series, which has no volume or page range" do
       series = doc_with(<<~XML)
         <mods:relatedItem type="series">

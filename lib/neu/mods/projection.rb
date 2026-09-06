@@ -212,8 +212,18 @@ module NEU
       # cataloguer who records that a person both wrote and edited a work means
       # both. Each term prefers the type="text" roleTerm, falling back to the raw
       # code (NOT MARC-relator-translated -- see README).
+      #
+      # A name with no name text drops out. A mods:name carrying only a role
+      # projected { name: nil, roles: ["edt"] }, which a display renders as a
+      # labelled empty row and which every consumer had to guard against with
+      # its own compact_blank. #preserved_names deliberately keeps it: that list
+      # tells a curator what the XML holds, so an element they need to fix has
+      # to stay visible there.
       def names
-        doc.xpath("/mods:mods/mods:name", NAMESPACE).map { |node| name_entry(node) }
+        doc.xpath("/mods:mods/mods:name", NAMESPACE).filter_map do |node|
+          entry = name_entry(node)
+          entry if entry[:name]
+        end
       end
 
       # Editable (depositor-managed) creators: the plain names (no authority
@@ -270,7 +280,25 @@ module NEU
       # back by nothing.
       def publication_information = texts_at("/mods:mods/mods:originInfo/mods:publisher")
       def edition = texts_at("/mods:mods/mods:originInfo/mods:edition")
-      def place_of_publication = texts_at("/mods:mods/mods:originInfo/mods:place/mods:placeTerm")
+
+      # Prefer the type="text" term per place, falling back to a coded one --
+      # the pattern #role_term_value and #languages already use. Unfiltered, a
+      # marccountry code reached the display and the Solr places facet as a
+      # place name, so "mau" sat in the list beside Boston. A code still
+      # projects when it is all the record gives, because dropping it would
+      # lose the only statement the record made.
+      #
+      # TODO: expand a marccountry code through a registry, as LanguageCodes
+      # does for eng -> English. That needs a vendored code list.
+      def place_of_publication
+        doc.xpath("/mods:mods/mods:originInfo/mods:place", NAMESPACE).filter_map do |place|
+          text = clean(place.at_xpath("mods:placeTerm[@type='text']", NAMESPACE)&.text)
+          next text if text
+
+          clean(place.at_xpath("mods:placeTerm", NAMESPACE)&.text)
+        end
+      end
+
       def issuance = texts_at("/mods:mods/mods:originInfo/mods:issuance")
 
       # Serials. The @authority a record puts on a frequency is not projected:
@@ -359,6 +387,13 @@ module NEU
       # relatedItem @type values that already have a field of their own, so the
       # catch-all below does not repeat them.
       NAMED_RELATED_ITEM_TYPES = %w[series host].freeze
+
+      # The part detail types volume and issue already have named keys on a
+      # host entry, so #host_details does not repeat them -- the same split
+      # NAMED_RELATED_ITEM_TYPES makes for relatedItem. A caption is kept
+      # because it is the label a cataloguer wrote for the number ("chap."
+      # before "3"), which no consumer can reconstruct from an open @type.
+      NAMED_HOST_DETAIL_TYPES = %w[volume issue].freeze
 
       # Every other relatedItem, keeping its @type. MODS also defines
       # constituent, otherFormat, original, preceding, succeeding, isReferencedBy
@@ -697,12 +732,6 @@ module NEU
       # position. A record is free to write point="end" first, and taking the
       # first node would then invert the range.
       #
-      # A keyDate="yes" node wins the start slot, ahead of point="start" and
-      # ahead of document order. The flag is the record nominating its own
-      # principal date, and projecting the flag while reading the value from a
-      # different node made the two contradict each other: a consumer is told
-      # the record chose this date and then handed the one before it.
-      #
       # ONE DATE PER TYPE is the rule, and a repeated, non-ranged, unflagged
       # date of the same type is discarded. A range is one date with two ends,
       # which @point already models, and every consumer of the value -- a sort
@@ -714,11 +743,21 @@ module NEU
         nodes = doc.xpath("/mods:mods/mods:originInfo/mods:#{element}", NAMESPACE)
         return EMPTY_DATE if nodes.empty?
 
-        start = nodes.find { |n| attr_value(n, "keyDate") == "yes" && attr_value(n, "point") != "end" } ||
-                nodes.find { |n| attr_value(n, "point") == "start" } ||
-                nodes.find { |n| attr_value(n, "point") != "end" }
         finish = nodes.find { |n| attr_value(n, "point") == "end" }
-        date_entry(start, finish, nodes)
+        date_entry(start_date_node(nodes), finish, nodes)
+      end
+
+      # The node the value comes from: the flagged one, then the declared
+      # start, then document order.
+      #
+      # keyDate leads because the flag is the record nominating its own
+      # principal date. Projecting the flag while reading the value from a
+      # different node made the two contradict each other -- a consumer was told
+      # the record chose this date and then handed the one before it.
+      def start_date_node(nodes)
+        nodes.find { |n| attr_value(n, "keyDate") == "yes" && attr_value(n, "point") != "end" } ||
+          nodes.find { |n| attr_value(n, "point") == "start" } ||
+          nodes.find { |n| attr_value(n, "point") != "end" }
       end
 
       # The end point carries its OWN precision. "1935-06" to "1940" is legal,
@@ -852,13 +891,6 @@ module NEU
           extents: host_extents(part)
         }.reject { |_, value| value.nil? || value == [] }
       end
-
-      # The detail types volume and issue already have named keys above, so the
-      # catch-all does not repeat them -- the same split NAMED_RELATED_ITEM_TYPES
-      # makes for relatedItem. A caption is kept because it is the label a
-      # cataloguer wrote for the number ("chap." before "3"), which no consumer
-      # can reconstruct from an open @type.
-      NAMED_HOST_DETAIL_TYPES = %w[volume issue].freeze
 
       def host_details(part)
         part.xpath("mods:detail", NAMESPACE).filter_map do |node|

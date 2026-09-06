@@ -557,6 +557,37 @@ RSpec.describe "projection coverage" do
                .names.first[:roles]).to eq([])
     end
 
+    # A name element carrying only a role is not a name, and it reached a
+    # display as a labelled empty row. The three shapes a record writes it in
+    # are an absent namePart, an empty one, and a whitespace-only one.
+    it "drops a name with a role and no name text, in all three shapes" do
+      roles_only = doc_with(<<~XML)
+        <mods:name type="corporate">
+          <mods:role><mods:roleTerm type="code">edt</mods:roleTerm></mods:role>
+        </mods:name>
+        <mods:name type="corporate">
+          <mods:namePart></mods:namePart>
+          <mods:role><mods:roleTerm type="code">edt</mods:roleTerm></mods:role>
+        </mods:name>
+        <mods:name type="personal">
+          <mods:namePart type="family">   </mods:namePart>
+          <mods:role><mods:roleTerm type="code">edt</mods:roleTerm></mods:role>
+        </mods:name>
+      XML
+      expect(roles_only.names).to eq([])
+    end
+
+    # #preserved_names is the list that tells a curator what the XML holds, so
+    # an element they need to fix has to stay visible in it.
+    it "keeps a nameless name in the preserved list, which reports the XML" do
+      roles_only = doc_with(<<~XML)
+        <mods:name type="corporate">
+          <mods:role><mods:roleTerm type="code">edt</mods:roleTerm></mods:role>
+        </mods:name>
+      XML
+      expect(roles_only.preserved_names).to eq([{ name: nil, roles: ["edt"], affiliation: [] }])
+    end
+
     # The simple form writes one Creator role back, so it must not claim a name
     # carrying roles it cannot represent -- saving would drop them from the
     # preservation XML.
@@ -619,6 +650,41 @@ RSpec.describe "projection coverage" do
         expect(doc.issuance).to eq(["monographic"])
         expect(doc.frequency).to eq(["Quarterly"])
       end
+    end
+
+    # A marccountry code is not a place name, and unfiltered it reached the
+    # display and the Solr places facet beside real ones.
+    it "prefers a place's text term over its code" do
+      coded = doc_with(<<~XML)
+        <mods:originInfo>
+          <mods:place>
+            <mods:placeTerm type="code" authority="marccountry">mau</mods:placeTerm>
+            <mods:placeTerm type="text">Boston</mods:placeTerm>
+          </mods:place>
+        </mods:originInfo>
+      XML
+      expect(coded.place_of_publication).to eq(["Boston"])
+    end
+
+    # Dropping the code would lose the only statement the record made about
+    # where this was published.
+    it "falls back to the code when the place gives nothing else" do
+      code_only = doc_with(<<~XML)
+        <mods:originInfo>
+          <mods:place><mods:placeTerm type="code" authority="marccountry">mau</mods:placeTerm></mods:place>
+        </mods:originInfo>
+      XML
+      expect(code_only.place_of_publication).to eq(["mau"])
+    end
+
+    it "reads each place separately, so two originInfo places both survive" do
+      two = doc_with(<<~XML)
+        <mods:originInfo>
+          <mods:place><mods:placeTerm type="text">Boston</mods:placeTerm></mods:place>
+          <mods:place><mods:placeTerm type="text">London</mods:placeTerm></mods:place>
+        </mods:originInfo>
+      XML
+      expect(two.place_of_publication).to eq(%w[Boston London])
     end
 
     it "projects the contents list and the reformatting quality" do

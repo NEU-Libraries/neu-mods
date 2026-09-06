@@ -270,6 +270,41 @@ RSpec.describe NEU::MODS::Document do
       end
     end
 
+    # dateCaptured, dateValid, dateOther and dateModified were read by nothing,
+    # so a digitisation date a cataloguer keyed reached no consumer at all.
+    # They read exactly like the other three, precision and range included.
+    it "applies the same shape to the four remaining originInfo dates" do
+      doc = doc_with_origin_info(<<~XML)
+        <mods:dateCaptured encoding="w3cdtf">2019-04-11</mods:dateCaptured>
+        <mods:dateValid encoding="w3cdtf" point="start">1990</mods:dateValid>
+        <mods:dateValid encoding="w3cdtf" point="end">2000</mods:dateValid>
+        <mods:dateOther qualifier="inferred">1930</mods:dateOther>
+        <mods:dateModified encoding="w3cdtf">2024-08</mods:dateModified>
+      XML
+
+      aggregate_failures do
+        expect(doc.date_captured).to eq(DateTime.new(2019, 4, 11))
+        expect(doc.date_captured_precision).to eq("day")
+        expect(doc.date_valid).to eq(DateTime.new(1990, 1, 1))
+        expect(doc.date_valid_end).to eq(DateTime.new(2000, 1, 1))
+        expect(doc.date_other).to eq(DateTime.new(1930, 1, 1))
+        expect(doc.date_other_qualifier).to eq("inferred")
+        expect(doc.date_modified).to eq(DateTime.new(2024, 8, 1))
+        expect(doc.date_modified_precision).to eq("month")
+      end
+    end
+
+    it "reports the four as absent rather than blank on a record without them" do
+      doc = doc_with_date("1930")
+
+      aggregate_failures do
+        %i[date_captured date_valid date_other date_modified].each do |field|
+          expect(doc.public_send(field)).to be_nil
+          expect(doc.public_send(:"#{field}_key_date")).to be_nil
+        end
+      end
+    end
+
     it "applies the same shape to the other two originInfo dates" do
       doc = doc_with_origin_info(<<~XML)
         <mods:dateIssued keyDate="yes" point="start" qualifier="approximate">1935</mods:dateIssued>

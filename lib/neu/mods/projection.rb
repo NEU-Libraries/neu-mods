@@ -429,9 +429,20 @@ module NEU
       # The parts are projected as separate flat fields rather than one nested
       # value, because the value half has three consumers that need a real date
       # object -- a Solr sort key, a citation year and an OAI date.
+      # MODS puts seven date elements under originInfo and this reads all of
+      # them. dateCaptured is when the object was digitised and dateModified is
+      # when the resource changed -- preservation and cataloguing provenance,
+      # which a consumer may keep off a page but cannot recover from anywhere
+      # else. dateValid is the period the content holds for, and dateOther is
+      # where a date fitting no other element lands, which is where a quantity
+      # of migrated v1 date data goes.
       def date_created_parts = date_parts("dateCreated")
       def date_issued_parts = date_parts("dateIssued")
       def copyright_date_parts = date_parts("copyrightDate")
+      def date_captured_parts = date_parts("dateCaptured")
+      def date_valid_parts = date_parts("dateValid")
+      def date_other_parts = date_parts("dateOther")
+      def date_modified_parts = date_parts("dateModified")
 
       def date_created = date_created_parts[:value]
       def date_created_precision = date_created_parts[:precision]
@@ -453,6 +464,34 @@ module NEU
       def copyright_date_end_precision = copyright_date_parts[:end_precision]
       def copyright_date_qualifier = copyright_date_parts[:qualifier]
       def copyright_date_key_date = copyright_date_parts[:key_date]
+
+      def date_captured = date_captured_parts[:value]
+      def date_captured_precision = date_captured_parts[:precision]
+      def date_captured_end = date_captured_parts[:end_value]
+      def date_captured_end_precision = date_captured_parts[:end_precision]
+      def date_captured_qualifier = date_captured_parts[:qualifier]
+      def date_captured_key_date = date_captured_parts[:key_date]
+
+      def date_valid = date_valid_parts[:value]
+      def date_valid_precision = date_valid_parts[:precision]
+      def date_valid_end = date_valid_parts[:end_value]
+      def date_valid_end_precision = date_valid_parts[:end_precision]
+      def date_valid_qualifier = date_valid_parts[:qualifier]
+      def date_valid_key_date = date_valid_parts[:key_date]
+
+      def date_other = date_other_parts[:value]
+      def date_other_precision = date_other_parts[:precision]
+      def date_other_end = date_other_parts[:end_value]
+      def date_other_end_precision = date_other_parts[:end_precision]
+      def date_other_qualifier = date_other_parts[:qualifier]
+      def date_other_key_date = date_other_parts[:key_date]
+
+      def date_modified = date_modified_parts[:value]
+      def date_modified_precision = date_modified_parts[:precision]
+      def date_modified_end = date_modified_parts[:end_value]
+      def date_modified_end_precision = date_modified_parts[:end_precision]
+      def date_modified_qualifier = date_modified_parts[:qualifier]
+      def date_modified_key_date = date_modified_parts[:key_date]
 
       # The [value, precision] pair the precision work introduced. Retained
       # because it is the documented entry point for a caller that wants both
@@ -506,8 +545,9 @@ module NEU
         edition: :many,
         issuance: :many,
         frequency: :many,
-        # Six rows per originInfo date. Flat rather than one nested value,
-        # because the value half has consumers that need a real date object.
+        # Six rows per originInfo date, for each of the seven MODS defines.
+        # Flat rather than one nested value, because the value half has
+        # consumers that need a real date object.
         date_created: :one,
         date_created_precision: :one,
         date_created_end: :one,
@@ -526,6 +566,30 @@ module NEU
         copyright_date_end_precision: :one,
         copyright_date_qualifier: :one,
         copyright_date_key_date: :one,
+        date_captured: :one,
+        date_captured_precision: :one,
+        date_captured_end: :one,
+        date_captured_end_precision: :one,
+        date_captured_qualifier: :one,
+        date_captured_key_date: :one,
+        date_valid: :one,
+        date_valid_precision: :one,
+        date_valid_end: :one,
+        date_valid_end_precision: :one,
+        date_valid_qualifier: :one,
+        date_valid_key_date: :one,
+        date_other: :one,
+        date_other_precision: :one,
+        date_other_end: :one,
+        date_other_end_precision: :one,
+        date_other_qualifier: :one,
+        date_other_key_date: :one,
+        date_modified: :one,
+        date_modified_precision: :one,
+        date_modified_end: :one,
+        date_modified_end_precision: :one,
+        date_modified_qualifier: :one,
+        date_modified_key_date: :one,
 
         # physical description
         resource_type: :many,

@@ -173,6 +173,47 @@ RSpec.describe NEU::MODS::Document do
       end
     end
 
+    # The flag and the value used to contradict each other: the flag was
+    # computed across every node while the value was read from the first, so a
+    # record flagging its second dateCreated sorted on the first and asserted
+    # the second.
+    describe "a record that flags its principal date" do
+      it "reads the value from the flagged node rather than from document order" do
+        doc = doc_with_origin_info(<<~XML)
+          <mods:dateCreated>1920</mods:dateCreated>
+          <mods:dateCreated keyDate="yes">1931</mods:dateCreated>
+        XML
+
+        aggregate_failures do
+          expect(doc.date_created).to eq(DateTime.new(1931, 1, 1))
+          expect(doc.date_created_key_date).to be true
+        end
+      end
+
+      # The flag can sit on both ends of a range, and the end must not be
+      # promoted to the start just because it carries one.
+      it "keeps a flagged range the right way round" do
+        doc = doc_with_origin_info(<<~XML)
+          <mods:dateCreated keyDate="yes" point="end">1940</mods:dateCreated>
+          <mods:dateCreated keyDate="yes" point="start">1935</mods:dateCreated>
+        XML
+
+        aggregate_failures do
+          expect(doc.date_created).to eq(DateTime.new(1935, 1, 1))
+          expect(doc.date_created_end).to eq(DateTime.new(1940, 1, 1))
+        end
+      end
+
+      it "leaves an unflagged repeated date on document order" do
+        doc = doc_with_origin_info(<<~XML)
+          <mods:dateCreated>1920</mods:dateCreated>
+          <mods:dateCreated>1931</mods:dateCreated>
+        XML
+
+        expect(doc.date_created).to eq(DateTime.new(1920, 1, 1))
+      end
+    end
+
     # #at_xpath took the first node, so one end of a range was promoted to be
     # THE date and the output was indistinguishable from a single certain year.
     describe "a ranged date" do

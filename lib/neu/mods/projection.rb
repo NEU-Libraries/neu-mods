@@ -621,11 +621,26 @@ module NEU
       # One originInfo date element, read by its attributes rather than by
       # position. A record is free to write point="end" first, and taking the
       # first node would then invert the range.
+      #
+      # A keyDate="yes" node wins the start slot, ahead of point="start" and
+      # ahead of document order. The flag is the record nominating its own
+      # principal date, and projecting the flag while reading the value from a
+      # different node made the two contradict each other: a consumer is told
+      # the record chose this date and then handed the one before it.
+      #
+      # ONE DATE PER TYPE is the rule, and a repeated, non-ranged, unflagged
+      # date of the same type is discarded. A range is one date with two ends,
+      # which @point already models, and every consumer of the value -- a sort
+      # key, a citation year, an OAI date -- holds exactly one. Note the
+      # contrast with a repeated publisher, which survives because
+      # publication_information is :many; dates differ because the value is
+      # singular downstream, not because repetition went unnoticed.
       def date_parts(element)
         nodes = doc.xpath("/mods:mods/mods:originInfo/mods:#{element}", NAMESPACE)
         return EMPTY_DATE if nodes.empty?
 
-        start = nodes.find { |n| attr_value(n, "point") == "start" } ||
+        start = nodes.find { |n| attr_value(n, "keyDate") == "yes" && attr_value(n, "point") != "end" } ||
+                nodes.find { |n| attr_value(n, "point") == "start" } ||
                 nodes.find { |n| attr_value(n, "point") != "end" }
         finish = nodes.find { |n| attr_value(n, "point") == "end" }
         date_entry(start, finish, nodes)

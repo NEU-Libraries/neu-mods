@@ -19,7 +19,7 @@ RSpec.describe "Conformance: work-mods.xml projection" do
   end
 
   it "composes plain_title from the primary title only" do
-    expect(doc.plain_title).to eq("What's New - How We Respond to Disaster, Episode 1")
+    expect(doc.plain_title).to eq("What's New, Episode 1 - How We Respond to Disaster")
   end
 
   it "reproduces the mods-gem name display_value_w_date (quirks included)" do

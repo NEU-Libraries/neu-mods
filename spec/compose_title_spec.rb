@@ -6,19 +6,23 @@
 # XML on the read path). Document#plain_title is the same logic over title_parts;
 # the conformance/document specs pin its XML-driven behavior.
 RSpec.describe "NEU::MODS.compose_title" do
-  it "composes all parts in order: non_sort+title, : subtitle, - part_name, , part_number" do
+  # The number precedes the name: "Part 2. The Marshes" is the cataloguing
+  # convention, and the schema's unordered choice gives no document order to
+  # follow instead. The separator travels with its part, so the comma moves
+  # with the number.
+  it "composes all parts in order: non_sort+title, : subtitle, , part_number, - part_name" do
     parts = {
       non_sort: "The ", title: "Hobbit", subtitle: "There and Back Again",
       part_name: "Book One", part_number: "Episode 1"
     }
     expect(NEU::MODS.compose_title(parts))
-      .to eq("The Hobbit: There and Back Again - Book One, Episode 1")
+      .to eq("The Hobbit: There and Back Again, Episode 1 - Book One")
   end
 
   it "drops absent optional parts (nil or blank) but keeps non_sort+title" do
     expect(NEU::MODS.compose_title(non_sort: "", title: "What's New",
                                    part_name: "How We Respond", part_number: "Episode 1"))
-      .to eq("What's New - How We Respond, Episode 1")
+      .to eq("What's New, Episode 1 - How We Respond")
   end
 
   it "returns just non_sort+title when only those are present" do
@@ -71,6 +75,6 @@ RSpec.describe "NEU::MODS.compose_title" do
   it "is what Document#plain_title delegates to (same result over title_parts)" do
     doc = NEU::MODS::Document.parse(fixture("work-mods.xml"))
     expect(doc.plain_title).to eq(NEU::MODS.compose_title(doc.title_parts))
-    expect(doc.plain_title).to eq("What's New - How We Respond to Disaster, Episode 1")
+    expect(doc.plain_title).to eq("What's New, Episode 1 - How We Respond to Disaster")
   end
 end

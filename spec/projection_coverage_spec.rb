@@ -178,6 +178,20 @@ RSpec.describe "projection coverage" do
       end
     end
 
+    it "keeps a note about the object apart from a note about the work" do
+      scanned = doc_with(<<~XML)
+        <mods:note>A general note.</mods:note>
+        <mods:physicalDescription>
+          <mods:extent>24 pages</mods:extent>
+          <mods:note>Scanned at 600 dpi.</mods:note>
+        </mods:physicalDescription>
+      XML
+      aggregate_failures do
+        expect(scanned.physical_description_notes).to eq(["Scanned at 600 dpi."])
+        expect(scanned.notes).to eq([{ type: nil, value: "A general note." }])
+      end
+    end
+
     it "projects subject/occupation, the last member of the subject set" do
       occupations = doc_with(<<~XML)
         <mods:subject><mods:occupation>Cabinetmakers</mods:occupation></mods:subject>

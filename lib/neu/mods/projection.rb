@@ -258,6 +258,13 @@ module NEU
       def table_of_contents = texts_at("/mods:mods/mods:tableOfContents")
       def reformatting_quality = texts_at("/mods:mods/mods:physicalDescription/mods:reformattingQuality")
 
+      # A note about the object rather than about the work -- "Scanned at 600
+      # dpi" belongs beside the extent, not beside a content note. Projected as
+      # plain strings like its physicalDescription siblings: #notes keeps @type
+      # because the type changes what a top-level note means, and nothing here
+      # turns on it.
+      def physical_description_notes = texts_at("/mods:mods/mods:physicalDescription/mods:note")
+
       # An LCC or DDC call number. Note this is NOT the same concept as Atlas's
       # classification_ssim, which carries a FileSet content-type vocabulary --
       # the name collision is accidental and the consumer has to pick a free
@@ -510,6 +517,7 @@ module NEU
         extent: :many,
         digital_origin: :many,
         reformatting_quality: :many,
+        physical_description_notes: :many,
         notes: :many,
         table_of_contents: :many,
 

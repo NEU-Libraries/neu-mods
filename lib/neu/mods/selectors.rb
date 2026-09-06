@@ -19,6 +19,15 @@ module NEU
       # next title edit, leaving the record with no primary title at all. nil is
       # the right answer instead -- MODSMerge creates a proper primary titleInfo
       # from nil, and each variant is projected under its own field.
+      #
+      # Where a record carries two UNTYPED titleInfo and marks neither, .first
+      # decides and the second reaches no field. That is the schema's answer
+      # rather than a shortfall: @usage is fixed="primary" and exists precisely
+      # to nominate the principal title, @type is a closed enumeration of the
+      # four variants, and MODS 3.5 gives a legitimate second untyped title an
+      # @altRepGroup (one title in two scripts) or an @otherType. An unmarked
+      # duplicate carries none of those, so MODS gives it no meaning to
+      # preserve, and it stays in the preservation XML with no projected field.
       def primary_title_info
         doc.at_xpath("/mods:mods/mods:titleInfo[@usage='primary']", NAMESPACE) ||
           doc.xpath("/mods:mods/mods:titleInfo", NAMESPACE).reject { |ti| variant_title?(ti) }.first

@@ -27,7 +27,7 @@ require "neu-mods"
 doc = NEU::MODS::Document.parse(xml_string)
 
 # Projection (plain data)
-doc.plain_title    # => "What's New - How We Respond to Disaster, Episode 1"
+doc.plain_title    # => "What's New, Episode 1 - How We Respond to Disaster"
 doc.title_parts    # => { non_sort:, subtitle:, title:, part_name:, part_number: }
                    #    byte-faithful -- the edit forms pre-fill from these
 doc.abstract       # => normalized, paragraph-joined String
@@ -42,9 +42,23 @@ doc.date_created_parts
                    #    shape it gave, so display cannot invent a month or a
                    #    day. The points are read by @point, not by document
                    #    order, and the end carries its OWN precision.
-                   #    Same for date_issued_parts and copyright_date_parts;
-                   #    each part is also a reader of its own, e.g.
+                   #    A keyDate="yes" node chooses the value, ahead of
+                   #    @point and document order; one date per type is the
+                   #    rule, so an unflagged repeat is discarded.
+                   #    Same for the other six originInfo dates --
+                   #    date_issued, copyright_date, date_captured,
+                   #    date_valid, date_other and date_modified. Each part is
+                   #    also a reader of its own, e.g.
                    #    doc.date_created_qualifier.
+doc.place_of_publication
+                   # => ["Boston"]   the type="text" placeTerm wins, so a
+                   #    marccountry code does not reach a places facet as a
+                   #    place name; a code-only place still projects its code
+doc.host_collections
+                   # => [{ title:, volume:, issue:, start_page:, end_page:,
+                   #      date:, text:, details: [...], extents: [...] }, ...]
+                   #    this work's position in its host. The entry survives on
+                   #    its part alone, so a host with no titleInfo is kept
 doc.notes          # => [{ type: "funding", value: "..." }, ...]
 doc.related_items  # => [{ type: "otherFormat", title: "..." }, ...]
                    #    every relatedItem that is not a series or a host
@@ -69,7 +83,9 @@ NEU::MODS::FIELDS  # => { main_title: :one, names: :many, ... }
 # the parts (e.g. Atlas's access-copy model) and must not re-parse XML on read.
 NEU::MODS.compose_title(non_sort: "", title: "What's New",
                         part_name: "How We Respond to Disaster", part_number: "Episode 1")
-# => "What's New - How We Respond to Disaster, Episode 1"   (== doc.plain_title)
+# => "What's New, Episode 1 - How We Respond to Disaster"   (== doc.plain_title)
+# The part NUMBER precedes the part NAME: "Part 2. The Marshes" is the
+# cataloguing convention, and titleInfo is an unordered choice in the schema.
 
 # Selectors (live nodes — for editing)
 node = doc.primary_title_info.at_xpath("mods:title", NEU::MODS::NAMESPACE)

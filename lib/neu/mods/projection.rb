@@ -130,6 +130,11 @@ module NEU
       def personal_name_subjects = name_subjects("personal")
       def corporate_name_subjects = name_subjects("corporate")
 
+      # The last unprojected member of a closed set: every other subject child
+      # already has a field, so leaving this one out made "what a subject can
+      # carry" arbitrary rather than complete.
+      def occupation_subjects = texts_at("/mods:mods/mods:subject/mods:occupation")
+
       def genre_subjects = texts_at("/mods:mods/mods:subject/mods:genre")
 
       # A MARC GAC code. Projected as the record wrote it: turning it into a
@@ -501,6 +506,7 @@ module NEU
         temporal_subjects: :many,
         personal_name_subjects: :many,
         corporate_name_subjects: :many,
+        occupation_subjects: :many,
         genre_subjects: :many,
         geographic_code_subjects: :many,
         title_subjects: :many,

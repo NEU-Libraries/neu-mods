@@ -178,6 +178,14 @@ RSpec.describe "projection coverage" do
       end
     end
 
+    it "projects subject/occupation, the last member of the subject set" do
+      occupations = doc_with(<<~XML)
+        <mods:subject><mods:occupation>Cabinetmakers</mods:occupation></mods:subject>
+        <mods:subject><mods:occupation>Shipwrights</mods:occupation></mods:subject>
+      XML
+      expect(occupations.occupation_subjects).to eq(%w[Cabinetmakers Shipwrights])
+    end
+
     it "composes a name subject through the same display port as #names" do
       subject_doc = doc_with(<<~XML)
         <mods:subject><mods:name type="corporate"><mods:namePart>Acme Corp</mods:namePart></mods:name></mods:subject>

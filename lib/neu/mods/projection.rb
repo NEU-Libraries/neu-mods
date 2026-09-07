@@ -113,6 +113,12 @@ module NEU
       def use_and_reproduction = access_conditions_of_type("use and reproduction")
       def restriction_on_access = access_conditions_of_type("restriction on access")
 
+      # An open-string @type reduced to its letters and digits, so casing, word
+      # separators and camelCasing cannot decide whether a field matches.
+      def self.fold_type(str)
+        NEU::MODS.canonical_ws(str).downcase.gsub(/[^a-z0-9]/, "")
+      end
+
       # --- Subjects ------------------------------------------------------------
 
       # The editable free-text keyword set (Cerberus simple form): topics under the
@@ -250,17 +256,24 @@ module NEU
 
       # --- Scalars / simple arrays --------------------------------------------
 
-      # Prefer the type="text" term, and translate a code-only one through the
-      # ISO 639 registry. A record saying `eng` projects "English", so the
-      # display and the Solr language facet read the same value rather than the
-      # facet showing codes. An unrecognised code survives as itself.
+      # { term:, object_part:, script: } per language element. Prefer the
+      # type="text" term, and translate a code-only one through the ISO 639
+      # registry. A record saying `eng` projects "English", so the display and
+      # the Solr language facet read the same value rather than the facet
+      # showing codes. An unrecognised code survives as itself.
+      #
+      # An entry rather than a bare string because @objectPart changes what the
+      # record is claiming. `<language objectPart="subtitles">spa` says the
+      # subtitles are Spanish, and projected flat it said the resource was --
+      # which is the case a captioned video hits every time. The script rides
+      # along for the same reason a name's role does: a consumer cannot
+      # recover it from the term.
       def languages
         doc.xpath("/mods:mods/mods:language", NAMESPACE).filter_map do |lang|
-          text = lang.at_xpath("mods:languageTerm[@type='text']", NAMESPACE)
-          next clean(text.text) if text
+          term = language_term(lang)
+          next unless term
 
-          code = clean(lang.at_xpath("mods:languageTerm", NAMESPACE)&.text)
-          code && LanguageCodes.term(code)
+          { term: term, object_part: attr_value(lang, "objectPart"), script: script_term(lang) }
         end
       end
 
@@ -282,20 +295,29 @@ module NEU
       def edition = texts_at("/mods:mods/mods:originInfo/mods:edition")
 
       # Prefer the type="text" term per place, falling back to a coded one --
-      # the pattern #role_term_value and #languages already use. Unfiltered, a
-      # marccountry code reached the display and the Solr places facet as a
-      # place name, so "mau" sat in the list beside Boston. A code still
-      # projects when it is all the record gives, because dropping it would
-      # lose the only statement the record made.
+      # the pattern #role_term_value and #languages already use.
+      #
+      # A bare marccountry code is the exception, and it drops. "mau" is not a
+      # place name, and unfiltered it reached the display and the Solr places
+      # facet as one, sitting in the list beside Boston. That is the call
+      # #geographic_code_subjects already makes for a MARC GAC code. A code
+      # under any other authority survives, because there the code may be the
+      # only statement the record made and nothing here can say it is not text.
       #
       # TODO: expand a marccountry code through a registry, as LanguageCodes
-      # does for eng -> English. That needs a vendored code list.
+      # does for eng -> English. That needs a vendored code list, and would let
+      # this project "Massachusetts" instead of dropping the element.
+      MARC_COUNTRY_AUTHORITY = "marccountry"
+
       def place_of_publication
         doc.xpath("/mods:mods/mods:originInfo/mods:place", NAMESPACE).filter_map do |place|
           text = clean(place.at_xpath("mods:placeTerm[@type='text']", NAMESPACE)&.text)
           next text if text
 
-          clean(place.at_xpath("mods:placeTerm", NAMESPACE)&.text)
+          code = place.at_xpath("mods:placeTerm", NAMESPACE)
+          next if attr_value(code, "authority") == MARC_COUNTRY_AUTHORITY
+
+          clean(code&.text)
         end
       end
 
@@ -307,7 +329,17 @@ module NEU
       # inconsistent.
       def frequency = texts_at("/mods:mods/mods:originInfo/mods:frequency")
 
-      def table_of_contents = texts_at("/mods:mods/mods:tableOfContents")
+      # Read with its line breaks intact. A legacy contents list separates its
+      # entries by newline, and the whitespace collapse every other field wants
+      # ran the entries together into one line -- there the break IS the
+      # structure, not stray formatting. A "--"-separated list is unaffected.
+      def table_of_contents
+        doc.xpath("/mods:mods/mods:tableOfContents", NAMESPACE).filter_map do |node|
+          lines = NEU::MODS.canonical_lines(node.text)
+          lines unless lines.empty?
+        end
+      end
+
       def reformatting_quality = texts_at("/mods:mods/mods:physicalDescription/mods:reformattingQuality")
 
       # A note about the object rather than about the work -- "Scanned at 600
@@ -417,10 +449,13 @@ module NEU
       # is a DOI, and a display cannot decide to linkify it. The same argument
       # #notes already makes for its @type, and #permanent_url already proves
       # the attribute is load-bearing by special-casing @type='hdl'.
+      # @invalid rides along because in MODS it means the identifier is
+      # cancelled, superseded or simply wrong. Projected flat, a dead ISBN read
+      # exactly like a live one and invited a reader to use it.
       def identifiers
         doc.xpath("/mods:mods/mods:identifier", NAMESPACE).filter_map do |node|
           value = clean(node.text)
-          { type: clean(node["type"]), value: value } if value
+          { type: clean(node["type"]), value: value, invalid: attr_value(node, "invalid") == "yes" } if value
         end
       end
 
@@ -429,10 +464,6 @@ module NEU
         node && clean(node.text)
       end
 
-      # The three w3cdtf date shapes a dateCreated may stop at: year, year-month,
-      # or a full date. Matching the shape explicitly, rather than widening
-      # DateTime.parse, is what lets the declared precision fall out of the parse
-      # instead of being guessed after it.
       # The eleven children the XSD allows under hierarchicalGeographic, in the
       # order MODS lists them -- broadest first, which is also the order a
       # consumer composing a place string wants to reverse.
@@ -453,15 +484,27 @@ module NEU
         language_of_cataloging: "mods:languageOfCataloging/mods:languageTerm"
       }.freeze
 
-      W3CDTF_DATE = /\A(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?\z/
+      # The w3cdtf date shapes a date element may stop at: year, year-month, a
+      # full date, or a full date with a time. Matching the shape explicitly,
+      # rather than widening DateTime.parse, is what lets the declared precision
+      # fall out of the parse instead of being guessed after it.
+      #
+      # A value outside these shapes is NOT a date, and #parse_w3cdtf says so
+      # rather than guessing. Ruby's DateTime.parse fills the components it
+      # cannot find from the CURRENT date, so "19uu" -- standard MARC 008 fill,
+      # which the v1 corpus carries at scale -- asserted today's date at "day"
+      # precision, and the assertion changed daily. What the record actually
+      # wrote survives in the matching *_text field instead.
+      W3CDTF_DATE = /\A(\d{4})(?:-(\d{2})(?:-(\d{2})(T\S+)?)?)?\z/
 
       # What #date_parts returns when the element is absent entirely, so an
       # absent date is distinguishable from one present and unparseable.
-      EMPTY_DATE = { value: nil, precision: nil, end_value: nil,
-                     end_precision: nil, qualifier: nil, key_date: nil }.freeze
+      EMPTY_DATE = { value: nil, precision: nil, end_value: nil, end_precision: nil,
+                     qualifier: nil, key_date: nil, text: nil }.freeze
 
       # Everything a record declared about one originInfo date, as
-      # { value:, precision:, end_value:, end_precision:, qualifier:, key_date: }.
+      # { value:, precision:, end_value:, end_precision:, qualifier:, key_date:,
+      #   text: }.
       #
       # A date is not a scalar. Precision established that: a year-only date
       # parses to January 1st, and no consumer downstream can tell that month
@@ -474,7 +517,9 @@ module NEU
       #
       # The parts are projected as separate flat fields rather than one nested
       # value, because the value half has three consumers that need a real date
-      # object -- a Solr sort key, a citation year and an OAI date.
+      # object -- a Solr sort key, a citation year and an OAI date. Those three
+      # are also why the literal gets its own field rather than sharing the
+      # value: a sort key cannot hold "ca. 1920", and a display can.
       # MODS puts seven date elements under originInfo and this reads all of
       # them. dateCaptured is when the object was digitised and dateModified is
       # when the resource changed -- preservation and cataloguing provenance,
@@ -496,6 +541,7 @@ module NEU
       def date_created_end_precision = date_created_parts[:end_precision]
       def date_created_qualifier = date_created_parts[:qualifier]
       def date_created_key_date = date_created_parts[:key_date]
+      def date_created_text = date_created_parts[:text]
 
       def date_issued = date_issued_parts[:value]
       def date_issued_precision = date_issued_parts[:precision]
@@ -503,6 +549,7 @@ module NEU
       def date_issued_end_precision = date_issued_parts[:end_precision]
       def date_issued_qualifier = date_issued_parts[:qualifier]
       def date_issued_key_date = date_issued_parts[:key_date]
+      def date_issued_text = date_issued_parts[:text]
 
       def copyright_date = copyright_date_parts[:value]
       def copyright_date_precision = copyright_date_parts[:precision]
@@ -510,6 +557,7 @@ module NEU
       def copyright_date_end_precision = copyright_date_parts[:end_precision]
       def copyright_date_qualifier = copyright_date_parts[:qualifier]
       def copyright_date_key_date = copyright_date_parts[:key_date]
+      def copyright_date_text = copyright_date_parts[:text]
 
       def date_captured = date_captured_parts[:value]
       def date_captured_precision = date_captured_parts[:precision]
@@ -517,6 +565,7 @@ module NEU
       def date_captured_end_precision = date_captured_parts[:end_precision]
       def date_captured_qualifier = date_captured_parts[:qualifier]
       def date_captured_key_date = date_captured_parts[:key_date]
+      def date_captured_text = date_captured_parts[:text]
 
       def date_valid = date_valid_parts[:value]
       def date_valid_precision = date_valid_parts[:precision]
@@ -524,6 +573,7 @@ module NEU
       def date_valid_end_precision = date_valid_parts[:end_precision]
       def date_valid_qualifier = date_valid_parts[:qualifier]
       def date_valid_key_date = date_valid_parts[:key_date]
+      def date_valid_text = date_valid_parts[:text]
 
       def date_other = date_other_parts[:value]
       def date_other_precision = date_other_parts[:precision]
@@ -531,6 +581,7 @@ module NEU
       def date_other_end_precision = date_other_parts[:end_precision]
       def date_other_qualifier = date_other_parts[:qualifier]
       def date_other_key_date = date_other_parts[:key_date]
+      def date_other_text = date_other_parts[:text]
 
       def date_modified = date_modified_parts[:value]
       def date_modified_precision = date_modified_parts[:precision]
@@ -538,6 +589,7 @@ module NEU
       def date_modified_end_precision = date_modified_parts[:end_precision]
       def date_modified_qualifier = date_modified_parts[:qualifier]
       def date_modified_key_date = date_modified_parts[:key_date]
+      def date_modified_text = date_modified_parts[:text]
 
       # The [value, precision] pair the precision work introduced. Retained
       # because it is the documented entry point for a caller that wants both
@@ -591,7 +643,7 @@ module NEU
         edition: :many,
         issuance: :many,
         frequency: :many,
-        # Six rows per originInfo date, for each of the seven MODS defines.
+        # Seven rows per originInfo date, for each of the seven MODS defines.
         # Flat rather than one nested value, because the value half has
         # consumers that need a real date object.
         date_created: :one,
@@ -600,42 +652,49 @@ module NEU
         date_created_end_precision: :one,
         date_created_qualifier: :one,
         date_created_key_date: :one,
+        date_created_text: :one,
         date_issued: :one,
         date_issued_precision: :one,
         date_issued_end: :one,
         date_issued_end_precision: :one,
         date_issued_qualifier: :one,
         date_issued_key_date: :one,
+        date_issued_text: :one,
         copyright_date: :one,
         copyright_date_precision: :one,
         copyright_date_end: :one,
         copyright_date_end_precision: :one,
         copyright_date_qualifier: :one,
         copyright_date_key_date: :one,
+        copyright_date_text: :one,
         date_captured: :one,
         date_captured_precision: :one,
         date_captured_end: :one,
         date_captured_end_precision: :one,
         date_captured_qualifier: :one,
         date_captured_key_date: :one,
+        date_captured_text: :one,
         date_valid: :one,
         date_valid_precision: :one,
         date_valid_end: :one,
         date_valid_end_precision: :one,
         date_valid_qualifier: :one,
         date_valid_key_date: :one,
+        date_valid_text: :one,
         date_other: :one,
         date_other_precision: :one,
         date_other_end: :one,
         date_other_end_precision: :one,
         date_other_qualifier: :one,
         date_other_key_date: :one,
+        date_other_text: :one,
         date_modified: :one,
         date_modified_precision: :one,
         date_modified_end: :one,
         date_modified_end_precision: :one,
         date_modified_qualifier: :one,
         date_modified_key_date: :one,
+        date_modified_text: :one,
 
         # physical description
         resource_type: :many,
@@ -708,24 +767,30 @@ module NEU
 
       # --- helpers -------------------------------------------------------------
 
-      # A shape-matched but impossible date (2026-13, 2026-02-30) reaches DateTime
-      # and raises; it falls to the "" sentinel like any other unparseable value.
-      # Anything outside the three shapes keeps the old permissive parse, so a
-      # timestamp still projects as a full date.
+      # [DateTime, precision] for a w3cdtf date, or nil for a string that is not
+      # one. A shape-matched but impossible date (2026-13, 2026-02-30) reaches
+      # DateTime, raises, and is nil like any other unreadable value; the caller
+      # keeps its literal text.
+      #
+      # A full timestamp goes through DateTime.parse rather than being rebuilt,
+      # so the time of day a dateModified declares survives. Its precision is
+      # "day" because that is the finest granularity a consumer renders.
       def parse_w3cdtf(str)
         m = W3CDTF_DATE.match(str)
-        return [DateTime.parse(str), "day"] unless m
+        return nil unless m
+        return [DateTime.parse(str), "day"] if m[4]
 
-        precision = if m[3]
-                      "day"
-                    elsif m[2]
-                      "month"
-                    else
-                      "year"
-                    end
-        [DateTime.new(m[1].to_i, (m[2] || 1).to_i, (m[3] || 1).to_i), precision]
+        [DateTime.new(m[1].to_i, (m[2] || 1).to_i, (m[3] || 1).to_i), w3cdtf_precision(m)]
       rescue Date::Error
-        ["", nil]
+        nil
+      end
+
+      # The granularity the record stopped at, which is the whole point of
+      # matching the shape rather than widening the parse.
+      def w3cdtf_precision(match)
+        return "day" if match[3]
+
+        match[2] ? "month" : "year"
       end
 
       # One originInfo date element, read by its attributes rather than by
@@ -770,7 +835,7 @@ module NEU
       # itself: MODS enumerates approximate, inferred and questionable, but the
       # record still said something.
       def date_entry(start, finish, nodes)
-        value, precision = node_date(start)
+        value, precision, text = node_date(start)
         end_value, end_precision = node_date(finish)
         {
           value: value,
@@ -778,17 +843,28 @@ module NEU
           end_value: end_value,
           end_precision: end_precision,
           qualifier: attr_value(start, "qualifier") || attr_value(finish, "qualifier"),
-          key_date: nodes.any? { |n| attr_value(n, "keyDate") == "yes" }
+          key_date: nodes.any? { |n| attr_value(n, "keyDate") == "yes" },
+          text: text
         }
       end
 
+      # [value, precision, text]. A node whose text is not a w3cdtf date yields
+      # no value and keeps its literal instead: "ca. 1920", "19th century" and
+      # "1918-1921" in one element are all real statements a cataloguer made,
+      # and a preservation repository must neither invent a date for them nor
+      # delete them. Only the start node's literal is kept -- the observed
+      # corpus writes an unreadable date as one element, and an end point that
+      # needs its own literal has never been seen.
       def node_date(node)
-        return [nil, nil] unless node
+        return [nil, nil, nil] unless node
 
         str = NEU::MODS.canonical_ws(node.text)
-        return [nil, nil] if str.empty?
+        return [nil, nil, nil] if str.empty?
 
-        parse_w3cdtf(str)
+        parsed = parse_w3cdtf(str)
+        return [parsed[0], parsed[1], nil] if parsed
+
+        [nil, nil, str]
       end
 
       def attr_value(node, name)
@@ -953,6 +1029,26 @@ module NEU
         doc.xpath(xpath, NAMESPACE).filter_map { |node| clean(node.text) }
       end
 
+      # The language of one element: the text term, or a code read through the
+      # ISO 639 registry.
+      def language_term(lang)
+        text = lang.at_xpath("mods:languageTerm[@type='text']", NAMESPACE)
+        return clean(text.text) if text
+
+        code = clean(lang.at_xpath("mods:languageTerm", NAMESPACE)&.text)
+        code && LanguageCodes.term(code)
+      end
+
+      # A scriptTerm, text form preferred. No registry expands a code here: the
+      # ISO 15924 list is not vendored, and inventing a half-translation would
+      # be worse than handing the consumer what the record wrote.
+      def script_term(lang)
+        text = lang.at_xpath("mods:scriptTerm[@type='text']", NAMESPACE)
+        return clean(text.text) if text
+
+        clean(lang.at_xpath("mods:scriptTerm", NAMESPACE)&.text)
+      end
+
       def child_text(parent, xpath)
         return nil unless parent
 
@@ -977,12 +1073,20 @@ module NEU
         NEU::MODS.canonical_ws(str)
       end
 
-      # The schema leaves accessCondition/@type an open string, so match on the
-      # canonicalised, case-folded value rather than in the XPath: real records
-      # carry "Use and Reproduction" as readily as the MODS-recommended casing.
+      # The schema leaves accessCondition/@type an open string, so match on a
+      # folded key rather than in the XPath. Real records carry "Use and
+      # Reproduction", "useAndReproduction" and "restriction-on-access" as
+      # readily as the MODS-recommended casing, and an unmatched
+      # restrictionOnAccess fell through to the generic #access_condition --
+      # which is the same defect the two typed fields exist to prevent, reached
+      # by a different route: a restriction presented to a reader as a licence.
+      #
+      # A genuinely unrecognised type still falls through, which is what
+      # #access_condition is for.
       def access_conditions_of_type(type)
+        wanted = Projection.fold_type(type)
         nodes = doc.xpath("/mods:mods/mods:accessCondition", NAMESPACE)
-                   .select { |node| NEU::MODS.canonical_ws(node["type"].to_s).downcase == type }
+                   .select { |node| Projection.fold_type(node["type"]) == wanted }
         join_paragraphs(nodes)
       end
 

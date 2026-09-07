@@ -18,6 +18,15 @@ module NEU
         str.to_s.tr(NBSP, " ").gsub(/\s+/, " ").strip
       end
 
+      # canonical_ws per line, keeping the line breaks. For a field where a
+      # newline is structure rather than formatting -- tableOfContents, where
+      # the break separates one entry from the next. Blank lines drop, so a
+      # double-spaced list does not project empty entries.
+      def canonical_lines(str)
+        str.to_s.tr(NBSP, " ").split("\n").map { |line| line.gsub(/\s+/, " ").strip }
+           .reject(&:empty?).join("\n")
+      end
+
       # Treat values differing only by insignificant whitespace (NBSP vs space,
       # collapsible runs, leading/trailing) as equal.
       def whitespace_equivalent?(current, incoming)

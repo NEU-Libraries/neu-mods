@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
 RSpec.describe NEU::MODS::LanguageCodes do
-  def doc_with_language(term)
+  def doc_with_language(term, attributes = "")
     NEU::MODS::Document.parse(<<~XML)
       <?xml version="1.0" encoding="UTF-8"?>
       <mods:mods xmlns:mods="http://www.loc.gov/mods/v3">
         <mods:titleInfo usage="primary"><mods:title>Bare</mods:title></mods:titleInfo>
-        <mods:language>#{term}</mods:language>
+        <mods:language #{attributes}>#{term}</mods:language>
       </mods:mods>
     XML
   end
@@ -68,20 +68,47 @@ RSpec.describe NEU::MODS::LanguageCodes do
         <mods:languageTerm type="code">eng</mods:languageTerm>
         <mods:languageTerm type="text">English (US)</mods:languageTerm>
       XML
-      expect(doc_with_language(term).languages).to eq(["English (US)"])
+      expect(doc_with_language(term).languages).to eq([{ term: "English (US)", object_part: nil, script: nil }])
     end
 
     it "translates a code-only term" do
       term = %(<mods:languageTerm type="code" authority="iso639-2b">eng</mods:languageTerm>)
-      expect(doc_with_language(term).languages).to eq(["English"])
+      expect(doc_with_language(term).languages).to eq([{ term: "English", object_part: nil, script: nil }])
     end
 
     it "translates a languageTerm carrying no @type at all" do
-      expect(doc_with_language("<mods:languageTerm>fre</mods:languageTerm>").languages).to eq(["French"])
+      expect(doc_with_language("<mods:languageTerm>fre</mods:languageTerm>").languages)
+        .to eq([{ term: "French", object_part: nil, script: nil }])
     end
 
     it "drops a language element with no term" do
       expect(doc_with_language("").languages).to eq([])
+    end
+
+    # "The subtitles are Spanish" and "the resource is Spanish" are different
+    # claims, and a captioned video makes the first one every time.
+    it "keeps the object part the record qualified the language with" do
+      term = <<~XML
+        <mods:languageTerm type="code" authority="iso639-2b">spa</mods:languageTerm>
+      XML
+      expect(doc_with_language(term, %(objectPart="subtitles")).languages)
+        .to eq([{ term: "Spanish", object_part: "subtitles", script: nil }])
+    end
+
+    it "keeps a script term, text form preferred over the code" do
+      coded = <<~XML
+        <mods:languageTerm type="code">rus</mods:languageTerm>
+        <mods:scriptTerm type="code" authority="iso15924">Cyrl</mods:scriptTerm>
+      XML
+      texted = <<~XML
+        <mods:languageTerm type="code">rus</mods:languageTerm>
+        <mods:scriptTerm type="code" authority="iso15924">Cyrl</mods:scriptTerm>
+        <mods:scriptTerm type="text">Cyrillic</mods:scriptTerm>
+      XML
+      aggregate_failures do
+        expect(doc_with_language(coded).languages.first[:script]).to eq("Cyrl")
+        expect(doc_with_language(texted).languages.first[:script]).to eq("Cyrillic")
+      end
     end
   end
 end

@@ -35,6 +35,7 @@ module NEU
 
     # Whitespace no-op guard (see Canonicalize).
     def canonical_ws(str) = Canonicalize.canonical_ws(str)
+    def canonical_lines(str) = Canonicalize.canonical_lines(str)
     def whitespace_equivalent?(current, incoming) = Canonicalize.whitespace_equivalent?(current, incoming)
 
     # Curator-freetext normalization for the access copy (see TextNormalizer).

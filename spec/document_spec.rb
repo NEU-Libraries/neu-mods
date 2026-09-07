@@ -114,15 +114,20 @@ RSpec.describe NEU::MODS::Document do
         .to eq([DateTime.new(2026, 1, 1), "year"])
     end
 
-    it "falls to the sentinel for a shape-matched but impossible date" do
+    it "reports no date for a shape-matched but impossible one, keeping the literal" do
       aggregate_failures do
-        expect(doc_with_date("2026-13").date_created_with_precision).to eq(["", nil])
-        expect(doc_with_date("2026-02-30").date_created_with_precision).to eq(["", nil])
+        expect(doc_with_date("2026-13").date_created_with_precision).to eq([nil, nil])
+        expect(doc_with_date("2026-13").date_created_text).to eq("2026-13")
+        expect(doc_with_date("2026-02-30").date_created_with_precision).to eq([nil, nil])
+        expect(doc_with_date("2026-02-30").date_created_text).to eq("2026-02-30")
       end
     end
 
-    it "falls to the sentinel for a qualified date outside w3cdtf" do
-      expect(doc_with_date("circa 2026").date_created_with_precision).to eq(["", nil])
+    it "reports no date for a qualified date outside w3cdtf, keeping the literal" do
+      aggregate_failures do
+        expect(doc_with_date("circa 2026").date_created_with_precision).to eq([nil, nil])
+        expect(doc_with_date("circa 2026").date_created_text).to eq("circa 2026")
+      end
     end
 
     it "returns nil for both halves when there is no dateCreated" do

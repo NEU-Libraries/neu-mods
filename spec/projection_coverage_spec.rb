@@ -159,6 +159,63 @@ RSpec.describe "projection coverage" do
       end
     end
 
+    # DateTime.parse fills what it cannot find from the CURRENT date, so a
+    # MARC-fill "19uu" asserted today and the assertion changed daily. A
+    # preservation repository must not state a date the record did not give.
+    describe "a date the record did not write in w3cdtf" do
+      ["19uu", "195u", "19--", "19th century", "ca. 1920", "1918-1921", "undated", "2026-13"].each do |literal|
+        it "projects no date for #{literal.inspect}, and keeps the literal" do
+          unreadable = doc_with(%(<mods:originInfo><mods:dateCreated>#{literal}</mods:dateCreated></mods:originInfo>))
+          aggregate_failures do
+            expect(unreadable.date_created).to be_nil
+            expect(unreadable.date_created_precision).to be_nil
+            expect(unreadable.date_created_text).to eq(literal)
+          end
+        end
+      end
+
+      it "keeps the text field empty for a date it could read" do
+        readable = doc_with("<mods:originInfo><mods:dateCreated>1935-06</mods:dateCreated></mods:originInfo>")
+        aggregate_failures do
+          expect(readable.date_created).to eq(DateTime.new(1935, 6, 1))
+          expect(readable.date_created_precision).to eq("month")
+          expect(readable.date_created_text).to be_nil
+        end
+      end
+
+      # A recordChangeDate or a dateModified is routinely a full timestamp, and
+      # it is a w3cdtf date -- the time of day survives with it.
+      it "still reads a full w3cdtf timestamp as a date" do
+        stamped = doc_with(<<~XML)
+          <mods:originInfo><mods:dateModified>2020-05-01T12:30:00Z</mods:dateModified></mods:originInfo>
+        XML
+        aggregate_failures do
+          expect(stamped.date_modified).to eq(DateTime.parse("2020-05-01T12:30:00Z"))
+          expect(stamped.date_modified_precision).to eq("day")
+          expect(stamped.date_modified_text).to be_nil
+        end
+      end
+
+      it "reports nothing at all when the element is absent" do
+        aggregate_failures do
+          expect(doc_with("").date_created).to be_nil
+          expect(doc_with("").date_created_text).to be_nil
+        end
+      end
+    end
+
+    # A terminal date alone is a real encoding -- "sometime before 1921" -- and
+    # it is the whole date the record has. The end value carries it; how a
+    # beginning-less date reads is the display's call.
+    it "projects an end point that stands alone" do
+      terminal = doc_with(%(<mods:originInfo><mods:dateCreated point="end">1921</mods:dateCreated></mods:originInfo>))
+      aggregate_failures do
+        expect(terminal.date_created).to be_nil
+        expect(terminal.date_created_end).to eq(DateTime.new(1921, 1, 1))
+        expect(terminal.date_created_end_precision).to eq("year")
+      end
+    end
+
     it "projects the edition" do
       expect(doc.edition).to eq(["2nd ed."])
     end
@@ -526,10 +583,17 @@ RSpec.describe "projection coverage" do
       XML
 
       expect(doc.identifiers).to eq([
-                                      { type: "doi", value: "10.1234/x" },
-                                      { type: "COLID", value: "bdr:12345" },
-                                      { type: nil, value: "2047/D20254217" }
+                                      { type: "doi", value: "10.1234/x", invalid: false },
+                                      { type: "COLID", value: "bdr:12345", invalid: false },
+                                      { type: nil, value: "2047/D20254217", invalid: false }
                                     ])
+    end
+
+    # In MODS the attribute means the identifier is cancelled, superseded or
+    # wrong. Unmarked, a dead ISBN invites a reader to go and use it.
+    it "keeps the @invalid flag a record puts on a cancelled identifier" do
+      doc = doc_with(%(<mods:identifier type="isbn" invalid="yes">0000000000</mods:identifier>))
+      expect(doc.identifiers).to eq([{ type: "isbn", value: "0000000000", invalid: true }])
     end
 
     it "still resolves the permanent URL off the hdl identifier" do
@@ -666,15 +730,26 @@ RSpec.describe "projection coverage" do
       expect(coded.place_of_publication).to eq(["Boston"])
     end
 
-    # Dropping the code would lose the only statement the record made about
-    # where this was published.
-    it "falls back to the code when the place gives nothing else" do
+    # "mau" is not a place name, and it reached the display and the Places
+    # facet as one. Dropping it loses nothing a reader could have used.
+    it "drops a bare marccountry code rather than showing it as a place" do
       code_only = doc_with(<<~XML)
         <mods:originInfo>
           <mods:place><mods:placeTerm type="code" authority="marccountry">mau</mods:placeTerm></mods:place>
         </mods:originInfo>
       XML
-      expect(code_only.place_of_publication).to eq(["mau"])
+      expect(code_only.place_of_publication).to eq([])
+    end
+
+    # Only marccountry is ruled on. Under another authority the code may be the
+    # only statement the record made, and nothing here can say it is not text.
+    it "keeps a bare code under any other authority" do
+      other = doc_with(<<~XML)
+        <mods:originInfo>
+          <mods:place><mods:placeTerm type="code" authority="iso3166">US-MA</mods:placeTerm></mods:place>
+        </mods:originInfo>
+      XML
+      expect(other.place_of_publication).to eq(["US-MA"])
     end
 
     it "reads each place separately, so two originInfo places both survive" do
@@ -692,6 +767,13 @@ RSpec.describe "projection coverage" do
         expect(doc.table_of_contents).to eq(["Chapter 1 -- Chapter 2"])
         expect(doc.reformatting_quality).to eq(["preservation"])
       end
+    end
+
+    # A legacy contents list separates its entries by newline. Collapsed, the
+    # three chapters arrived as one line and the structure was gone.
+    it "keeps the line breaks a contents list uses as its structure" do
+      lines = doc_with("<mods:tableOfContents>Ch 1\n  Ch 2\n\n  Ch 3\n</mods:tableOfContents>")
+      expect(lines.table_of_contents).to eq(["Ch 1\nCh 2\nCh 3"])
     end
 
     # An LCC or DDC call number. Not the same concept as Atlas's
@@ -791,6 +873,29 @@ RSpec.describe "projection coverage" do
     it "matches the @type case-insensitively, as the schema leaves it open" do
       expect(doc_with(%(<mods:accessCondition type="Use And Reproduction">CC BY 4.0</mods:accessCondition>))
                .use_and_reproduction).to eq("CC BY 4.0")
+    end
+
+    # Exported and legacy MODS writes these camelCased. Unmatched, a
+    # restrictionOnAccess fell through to the generic access_condition, which
+    # is a restriction presented to a reader as a licence.
+    it "matches a camelCased or hyphenated @type as the same type" do
+      aggregate_failures do
+        expect(doc_with(%(<mods:accessCondition type="restrictionOnAccess">Restricted.</mods:accessCondition>))
+                 .restriction_on_access).to eq("Restricted.")
+        expect(doc_with(%(<mods:accessCondition type="useAndReproduction">CC BY 4.0</mods:accessCondition>))
+                 .use_and_reproduction).to eq("CC BY 4.0")
+        expect(doc_with(%(<mods:accessCondition type="restriction-on-access">Restricted.</mods:accessCondition>))
+                 .restriction_on_access).to eq("Restricted.")
+      end
+    end
+
+    it "leaves a genuinely unrecognised type to the generic field" do
+      local = doc_with(%(<mods:accessCondition type="local rights statement">Ask us.</mods:accessCondition>))
+      aggregate_failures do
+        expect(local.use_and_reproduction).to eq("")
+        expect(local.restriction_on_access).to eq("")
+        expect(local.access_condition).to eq("Ask us.")
+      end
     end
 
     it "joins several conditions of one type as paragraphs" do

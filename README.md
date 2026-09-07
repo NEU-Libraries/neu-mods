@@ -31,12 +31,16 @@ doc.plain_title    # => "What's New, Episode 1 - How We Respond to Disaster"
 doc.title_parts    # => { non_sort:, subtitle:, title:, part_name:, part_number: }
                    #    byte-faithful -- the edit forms pre-fill from these
 doc.abstract       # => normalized, paragraph-joined String
-doc.languages      # => ["English"]   a code-only <languageTerm>eng</> included
+doc.languages      # => [{ term: "English", object_part: nil, script: nil }, ...]
+                   #    a code-only <languageTerm>eng</> is read through the
+                   #    ISO 639 registry. @objectPart rides along because
+                   #    objectPart="subtitles" says the SUBTITLES are Spanish,
+                   #    not the resource
 doc.topical_subjects # => ["Civil society", ...]   (every <topic>, for the access copy)
 doc.keywords       # => [...]   (only the editable attribute-free keyword subjects)
 doc.date_created_parts
                    # => { value:, precision:, end_value:, end_precision:,
-                   #      qualifier:, key_date: }   everything the record
+                   #      qualifier:, key_date:, text: }   everything the record
                    #    declared about one date. w3cdtf YYYY, YYYY-MM and
                    #    YYYY-MM-DD all parse, and the precision says which
                    #    shape it gave, so display cannot invent a month or a
@@ -45,20 +49,31 @@ doc.date_created_parts
                    #    A keyDate="yes" node chooses the value, ahead of
                    #    @point and document order; one date per type is the
                    #    rule, so an unflagged repeat is discarded.
+                   #    A value that is not a w3cdtf date projects NO date
+                   #    and keeps its literal in :text -- "19uu", "ca. 1920"
+                   #    and "undated" are statements a cataloguer made, and
+                   #    guessing a date for them is worse than either losing
+                   #    them or showing them as written.
                    #    Same for the other six originInfo dates --
                    #    date_issued, copyright_date, date_captured,
                    #    date_valid, date_other and date_modified. Each part is
                    #    also a reader of its own, e.g.
                    #    doc.date_created_qualifier.
 doc.place_of_publication
-                   # => ["Boston"]   the type="text" placeTerm wins, so a
-                   #    marccountry code does not reach a places facet as a
-                   #    place name; a code-only place still projects its code
+                   # => ["Boston"]   the type="text" placeTerm wins, and a
+                   #    bare marccountry code drops rather than reaching a
+                   #    places facet as a place name. A bare code under any
+                   #    other authority still projects
 doc.host_collections
                    # => [{ title:, volume:, issue:, start_page:, end_page:,
                    #      date:, text:, details: [...], extents: [...] }, ...]
                    #    this work's position in its host. The entry survives on
                    #    its part alone, so a host with no titleInfo is kept
+doc.identifiers    # => [{ type: "isbn", value: "...", invalid: false }, ...]
+                   #    @invalid means cancelled or superseded, so it travels
+doc.table_of_contents
+                   # => ["Ch 1\nCh 2"]   line breaks kept: in a contents list
+                   #    the break is the structure, not stray formatting
 doc.notes          # => [{ type: "funding", value: "..." }, ...]
 doc.related_items  # => [{ type: "otherFormat", title: "..." }, ...]
                    #    every relatedItem that is not a series or a host

@@ -47,7 +47,7 @@ RSpec.describe "Conformance: work-mods.xml projection" do
 
   it "projects the remaining scalar/array fields" do
     aggregate_failures do
-      expect(projection[:languages]).to eq(["English"])
+      expect(projection[:languages]).to eq([{ term: "English", object_part: nil, script: nil }])
       expect(projection[:resource_type]).to eq(["sound recording"])
       expect(projection[:genres]).to eq(["podcasts"])
       expect(projection[:format]).to eq(["electronic"])
@@ -55,7 +55,7 @@ RSpec.describe "Conformance: work-mods.xml projection" do
       expect(projection[:digital_origin]).to eq(["born digital"])
       expect(projection[:related_series]).to eq(["What's New Podcast"])
       expect(projection[:identifiers])
-        .to eq([{ type: "hdl", value: "http://hdl.handle.net/2047/D20254217" }])
+        .to eq([{ type: "hdl", value: "http://hdl.handle.net/2047/D20254217", invalid: false }])
       expect(projection[:permanent_url]).to eq("http://hdl.handle.net/2047/D20254217")
       expect(projection[:date_created]).to eq(DateTime.parse("2017-09-19"))
       expect(projection[:date_created_precision]).to eq("day")

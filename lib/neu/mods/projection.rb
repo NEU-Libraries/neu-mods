@@ -1055,8 +1055,16 @@ module NEU
 
       # The two attributes a display reads off an element rather than out of its
       # text: the header the record asked for, and the link the record attached.
-      # MODS puts them on the same 26 elements, so they travel together as one
-      # pair rather than as two parallel projections a consumer has to zip.
+      # They travel together as one pair rather than as two parallel
+      # projections a consumer has to zip.
+      #
+      # The two sets overlap rather than match. MODS 3.8 puts @displayLabel on
+      # 26 elements and xlink:href on 14 -- titleInfo, name, alternativeName,
+      # agent, subject, abstract, tableOfContents, note, relatedItem,
+      # accessCondition, physicalLocation and three more. Reading both off
+      # every element costs nothing: an element the schema does not let carry
+      # one simply projects nil for it, and a consumer asking the pair of any
+      # entry does not have to hold the two lists.
       #
       # An href with no text displays nothing. Every caller drops a value-less
       # element already, which is also what the librarians asked for: a link

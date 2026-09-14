@@ -86,7 +86,9 @@ doc.origin_agents  # => [{ name:, roles:, affiliation:, display_label:, href:,
 # two extra keys where the entry already had a shape of its own. MODS puts the
 # pair on originInfo and physicalDescription rather than on the publisher,
 # place, extent or digitalOrigin inside them, so those children read it off
-# their parent. The four fields that JOIN several elements into one string --
+# their parent. The two attribute sets overlap rather than match (26 elements
+# take @displayLabel, 14 take xlink:href); an element the schema gives neither
+# projects nil. The four fields that JOIN several elements into one string --
 # abstract and the three accessCondition fields -- take companion scalars
 # instead (doc.abstract_display_label, doc.abstract_href).
 doc.host_collections

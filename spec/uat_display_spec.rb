@@ -64,14 +64,25 @@ RSpec.describe "2026-09-14 UAT projection changes" do
   describe "@displayLabel and xlink:href" do
     it "carries the label and the link of the element holding the value" do
       doc = parse(<<~XML)
-        <mods:genre displayLabel="Photo type" xlink:href="https://vocab.getty.edu/aat/300128347">
-          photographs
-        </mods:genre>
+        <mods:genre displayLabel="Photo type">photographs</mods:genre>
+        <mods:note displayLabel="Provenance" xlink:href="https://example.org/finding-aid">
+          See the finding aid.
+        </mods:note>
       XML
-      expect(doc.genres).to eq(
-        [{ value: "photographs", display_label: "Photo type",
-           href: "https://vocab.getty.edu/aat/300128347" }]
-      )
+      aggregate_failures do
+        expect(doc.genres).to eq([{ value: "photographs", display_label: "Photo type", href: nil }])
+        expect(doc.notes).to eq(
+          [{ type: nil, value: "See the finding aid.", display_label: "Provenance",
+             href: "https://example.org/finding-aid" }]
+        )
+      end
+    end
+
+    # The two attribute sets overlap rather than match: MODS allows
+    # xlink:href on 14 elements and @displayLabel on 26. An element that
+    # cannot carry a link projects nil for it rather than being a special case.
+    it "projects a nil link for an element the schema gives no xlink:href" do
+      expect(parse("<mods:genre>photographs</mods:genre>").genres.first[:href]).to be_nil
     end
 
     # MODS puts @displayLabel on originInfo and physicalDescription, never on
@@ -130,8 +141,8 @@ RSpec.describe "2026-09-14 UAT projection changes" do
     end
 
     it "gives an element with a link and no text no value at all" do
-      doc = parse(%(<mods:genre xlink:href="https://example.org/g"></mods:genre>))
-      expect(doc.genres).to eq([])
+      doc = parse(%(<mods:note xlink:href="https://example.org/g"></mods:note>))
+      expect(doc.notes).to eq([])
     end
 
     it "carries the label on every entry-shaped projection" do

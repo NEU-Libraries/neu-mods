@@ -14,7 +14,7 @@ RSpec.describe "Creator read / select / build" do
     end
 
     it "exposes all of them as preserved (read-only) names with roles" do
-      expect(doc.preserved_names).to eq(
+      expect(without_qualifiers(doc.preserved_names)).to eq(
         [
           { name: "Cohen, Daniel J.(Daniel Jared), 1968-", roles: ["Creator"], affiliation: [] },
           { name: "Northeastern University (Boston, Mass.) Libraries", roles: ["Creator"], affiliation: [] },
@@ -40,7 +40,7 @@ RSpec.describe "Creator read / select / build" do
 
       expect(reparsed.editable_personal_creators).to eq([{ given: "Jenny", family: "Smith" }])
       # and it shows up as a plain Creator name, NOT in the preserved set
-      expect(reparsed.preserved_names).to eq([])
+      expect(without_qualifiers(reparsed.preserved_names)).to eq([])
     end
 
     it "builds a plain corporate creator that reads back as editable" do

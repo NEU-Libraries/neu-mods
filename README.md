@@ -60,24 +60,38 @@ doc.date_created_parts
                    #    also a reader of its own, e.g.
                    #    doc.date_created_qualifier.
 doc.place_of_publication
-                   # => ["Boston"]   the type="text" placeTerm wins, and a
-                   #    bare marccountry code drops rather than reaching a
-                   #    places facet as a place name. A bare code under any
-                   #    other authority still projects
+                   # => [{ value: "Boston", display_label:, href: }, ...]
+                   #    the type="text" placeTerm wins, and a bare marccountry
+                   #    code drops rather than reaching a places facet as a
+                   #    place name. A bare code under any other authority
+                   #    still projects
+
+# Every DISPLAYED projection carries the @displayLabel and xlink:href of the
+# element its header comes from, as { value:, display_label:, href: } -- or as
+# two extra keys where the entry already had a shape of its own. MODS puts the
+# pair on originInfo and physicalDescription rather than on the publisher,
+# place, extent or digitalOrigin inside them, so those children read it off
+# their parent. The four fields that JOIN several elements into one string --
+# abstract and the three accessCondition fields -- take companion scalars
+# instead (doc.abstract_display_label, doc.abstract_href).
 doc.host_collections
                    # => [{ title:, volume:, issue:, start_page:, end_page:,
                    #      date:, text:, details: [...], extents: [...] }, ...]
                    #    this work's position in its host. The entry survives on
                    #    its part alone, so a host with no titleInfo is kept
-doc.identifiers    # => [{ type: "isbn", value: "...", invalid: false }, ...]
+doc.identifiers    # => [{ type: "isbn", value: "...", invalid: false,
+                   #      display_label:, href: }, ...]
                    #    @invalid means cancelled or superseded, so it travels
 doc.table_of_contents
-                   # => ["Ch 1\nCh 2"]   line breaks kept: in a contents list
+                   # => [{ value: "Ch 1\nCh 2", ... }]
+                   #    line breaks kept: in a contents list
                    #    the break is the structure, not stray formatting
-doc.notes          # => [{ type: "funding", value: "..." }, ...]
-doc.related_items  # => [{ type: "otherFormat", title: "..." }, ...]
+doc.notes          # => [{ type: "funding", value: "...", display_label:, href: }, ...]
+doc.related_items  # => [{ type: "otherFormat", title: "...",
+                   #      display_label:, href: }, ...]
                    #    every relatedItem that is not a series or a host
-doc.location       # => [{ physical_location:, shelf_location:, url: }, ...]
+doc.location       # => [{ physical_location:, shelf_location:, url:,
+                   #      display_label:, href: }, ...]
 doc.map_data       # => [{ scale:, projection:, coordinates: }, ...]
 doc.title_subjects # => ["The Great Gatsby"]   composed like the main title
 doc.hierarchical_geographic_subjects

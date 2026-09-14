@@ -23,7 +23,7 @@ RSpec.describe "Conformance: work-mods.xml projection" do
   end
 
   it "reproduces the mods-gem name display_value_w_date (quirks included)" do
-    expect(projection[:names]).to eq(
+    expect(without_qualifiers(projection[:names])).to eq(
       [
         { name: "Cohen, Daniel J.(Daniel Jared), 1968-", roles: ["Creator"], affiliation: [] },
         { name: "Northeastern University (Boston, Mass.) Libraries", roles: ["Creator"], affiliation: [] },
@@ -47,14 +47,14 @@ RSpec.describe "Conformance: work-mods.xml projection" do
 
   it "projects the remaining scalar/array fields" do
     aggregate_failures do
-      expect(projection[:languages]).to eq([{ term: "English", object_part: nil, script: nil }])
-      expect(projection[:resource_type]).to eq(["sound recording"])
-      expect(projection[:genres]).to eq(["podcasts"])
-      expect(projection[:format]).to eq(["electronic"])
-      expect(projection[:extent]).to eq(["00:34:45"])
-      expect(projection[:digital_origin]).to eq(["born digital"])
-      expect(projection[:related_series]).to eq(["What's New Podcast"])
-      expect(projection[:identifiers])
+      expect(without_qualifiers(projection[:languages])).to eq([{ term: "English", object_part: nil, script: nil }])
+      expect(values_of(projection[:resource_type])).to eq(["sound recording"])
+      expect(values_of(projection[:genres])).to eq(["podcasts"])
+      expect(values_of(projection[:format])).to eq(["electronic"])
+      expect(values_of(projection[:extent])).to eq(["00:34:45"])
+      expect(values_of(projection[:digital_origin])).to eq(["born digital"])
+      expect(values_of(projection[:related_series])).to eq(["What's New Podcast"])
+      expect(without_qualifiers(projection[:identifiers]))
         .to eq([{ type: "hdl", value: "http://hdl.handle.net/2047/D20254217", invalid: false }])
       expect(projection[:permanent_url]).to eq("http://hdl.handle.net/2047/D20254217")
       expect(projection[:date_created]).to eq(DateTime.parse("2017-09-19"))

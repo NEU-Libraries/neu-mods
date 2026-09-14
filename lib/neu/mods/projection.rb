@@ -98,6 +98,13 @@ module NEU
         join_paragraphs(abstract_nodes)
       end
 
+      # The header and the link a record attached to its abstract. Companion
+      # scalars rather than an entry, because #abstract joins every abstract
+      # element into one value and three consumers -- the OAI dc:description,
+      # the citation and description_tsim -- hold that value as a string.
+      def abstract_display_label = first_attr(abstract_nodes, "displayLabel")
+      def abstract_href = first_href(abstract_nodes)
+
       # Every top-level accessCondition joined, regardless of @type. Retained
       # because it is the only projection that carries an untyped or
       # unrecognised accessCondition, which the two typed fields below cannot
@@ -112,6 +119,24 @@ module NEU
       # rights rather than merely hiding a field.
       def use_and_reproduction = access_conditions_of_type("use and reproduction")
       def restriction_on_access = access_conditions_of_type("restriction on access")
+
+      # Companion scalars for the same reason the abstract's are: each of the
+      # three fields joins several elements into one value, and a licence URI
+      # belongs beside the licence text a reader is given.
+      def access_condition_display_label = first_attr(access_condition_nodes, "displayLabel")
+      def access_condition_href = first_href(access_condition_nodes)
+
+      def use_and_reproduction_display_label
+        first_attr(access_condition_nodes("use and reproduction"), "displayLabel")
+      end
+
+      def use_and_reproduction_href = first_href(access_condition_nodes("use and reproduction"))
+
+      def restriction_on_access_display_label
+        first_attr(access_condition_nodes("restriction on access"), "displayLabel")
+      end
+
+      def restriction_on_access_href = first_href(access_condition_nodes("restriction on access"))
 
       # An open-string @type reduced to its letters and digits, so casing, word
       # separators and camelCasing cannot decide whether a field matches.
@@ -143,7 +168,7 @@ module NEU
       def subject_headings
         doc.xpath("/mods:mods/mods:subject", NAMESPACE).filter_map do |node|
           parts = subject_heading_parts(node)
-          { parts: parts } unless parts.empty?
+          { parts: parts, **qualifiers_of(node) } unless parts.empty?
         end
       end
 
@@ -208,7 +233,8 @@ module NEU
         {
           name: name_display_value_w_date(node),
           roles: name_roles(node),
-          affiliation: texts_under(node, "mods:affiliation")
+          affiliation: texts_under(node, "mods:affiliation"),
+          **qualifiers_of(node)
         }
       end
 
@@ -273,26 +299,39 @@ module NEU
           term = language_term(lang)
           next unless term
 
-          { term: term, object_part: attr_value(lang, "objectPart"), script: script_term(lang) }
+          { term: term, object_part: attr_value(lang, "objectPart"), script: script_term(lang),
+            **qualifiers_of(lang) }
         end
       end
 
       # MODS repeats typeOfResource, and repeats physicalDescription (and form and
       # extent within one), so all four are :many. A record that is both text and
       # a still image used to project as text alone.
-      def resource_type = texts_at("/mods:mods/mods:typeOfResource")
-      def format = texts_at("/mods:mods/mods:physicalDescription/mods:form")
-      def extent = texts_at("/mods:mods/mods:physicalDescription/mods:extent")
-      def digital_origin = texts_at("/mods:mods/mods:physicalDescription/mods:digitalOrigin")
+      def resource_type = labeled_texts_at("/mods:mods/mods:typeOfResource")
 
-      def genres = texts_at("/mods:mods/mods:genre")
+      # MODS puts @displayLabel on physicalDescription, not on the form, extent,
+      # digitalOrigin, reformattingQuality or note inside it -- so these four
+      # take the label off their parent. `from: ".."` says which element the
+      # header comes from; the value still comes from the element itself.
+      def format = labeled_texts_at("/mods:mods/mods:physicalDescription/mods:form", from: "..")
+      def extent = labeled_texts_at("/mods:mods/mods:physicalDescription/mods:extent", from: "..")
+      def digital_origin = labeled_texts_at("/mods:mods/mods:physicalDescription/mods:digitalOrigin", from: "..")
+
+      def genres = labeled_texts_at("/mods:mods/mods:genre")
+
+      # Who the resource is for. The last displayed top-level element with no
+      # projection at all: a record naming its audience said so to nobody.
+      def target_audience = labeled_texts_at("/mods:mods/mods:targetAudience")
 
       # originInfo repeats, and so do publisher and edition within one. Cerberus's
       # IPTC ingest writes the publisher from the IPTC Source field on every batch,
       # so this element was being written into the preservation XML and then read
       # back by nothing.
-      def publication_information = texts_at("/mods:mods/mods:originInfo/mods:publisher")
-      def edition = texts_at("/mods:mods/mods:originInfo/mods:edition")
+      # @displayLabel and @eventType sit on originInfo, not on the publisher,
+      # place, edition, issuance or frequency inside it, so each of these takes
+      # its header off the parent block.
+      def publication_information = labeled_texts_at("/mods:mods/mods:originInfo/mods:publisher", from: "..")
+      def edition = labeled_texts_at("/mods:mods/mods:originInfo/mods:edition", from: "..")
 
       # Prefer the type="text" term per place, falling back to a coded one --
       # the pattern #role_term_value and #languages already use.
@@ -311,23 +350,28 @@ module NEU
 
       def place_of_publication
         doc.xpath("/mods:mods/mods:originInfo/mods:place", NAMESPACE).filter_map do |place|
-          text = clean(place.at_xpath("mods:placeTerm[@type='text']", NAMESPACE)&.text)
-          next text if text
-
-          code = place.at_xpath("mods:placeTerm", NAMESPACE)
-          next if attr_value(code, "authority") == MARC_COUNTRY_AUTHORITY
-
-          clean(code&.text)
+          value = place_term_value(place)
+          labeled(value, place.parent) if value
         end
       end
 
-      def issuance = texts_at("/mods:mods/mods:originInfo/mods:issuance")
+      def place_term_value(place)
+        text = clean(place.at_xpath("mods:placeTerm[@type='text']", NAMESPACE)&.text)
+        return text if text
+
+        code = place.at_xpath("mods:placeTerm", NAMESPACE)
+        return nil if attr_value(code, "authority") == MARC_COUNTRY_AUTHORITY
+
+        clean(code&.text)
+      end
+
+      def issuance = labeled_texts_at("/mods:mods/mods:originInfo/mods:issuance", from: "..")
 
       # Serials. The @authority a record puts on a frequency is not projected:
       # authority handling is a question the gem defers everywhere else -- for
       # genre, subject and name -- and answering it for one field would be
       # inconsistent.
-      def frequency = texts_at("/mods:mods/mods:originInfo/mods:frequency")
+      def frequency = labeled_texts_at("/mods:mods/mods:originInfo/mods:frequency", from: "..")
 
       # Read with its line breaks intact. A legacy contents list separates its
       # entries by newline, and the whitespace collapse every other field wants
@@ -336,24 +380,26 @@ module NEU
       def table_of_contents
         doc.xpath("/mods:mods/mods:tableOfContents", NAMESPACE).filter_map do |node|
           lines = NEU::MODS.canonical_lines(node.text)
-          lines unless lines.empty?
+          labeled(lines, node) unless lines.empty?
         end
       end
 
-      def reformatting_quality = texts_at("/mods:mods/mods:physicalDescription/mods:reformattingQuality")
+      def reformatting_quality
+        labeled_texts_at("/mods:mods/mods:physicalDescription/mods:reformattingQuality", from: "..")
+      end
 
       # A note about the object rather than about the work -- "Scanned at 600
       # dpi" belongs beside the extent, not beside a content note. Projected as
       # plain strings like its physicalDescription siblings: #notes keeps @type
       # because the type changes what a top-level note means, and nothing here
       # turns on it.
-      def physical_description_notes = texts_at("/mods:mods/mods:physicalDescription/mods:note")
+      def physical_description_notes = labeled_texts_at("/mods:mods/mods:physicalDescription/mods:note", from: "..")
 
       # An LCC or DDC call number. Note this is NOT the same concept as Atlas's
       # classification_ssim, which carries a FileSet content-type vocabulary --
       # the name collision is accidental and the consumer has to pick a free
       # Solr field.
-      def classification = texts_at("/mods:mods/mods:classification")
+      def classification = labeled_texts_at("/mods:mods/mods:classification")
 
       # Every top-level note, keeping its @type. The type carries meaning -- a
       # "statement of responsibility" is not a "funding" note -- so flattening
@@ -361,7 +407,7 @@ module NEU
       def notes
         doc.xpath("/mods:mods/mods:note", NAMESPACE).filter_map do |node|
           value = clean(node.text)
-          { type: clean(node["type"]), value: value } if value
+          { type: clean(node["type"]), value: value, **qualifiers_of(node) } if value
         end
       end
 
@@ -379,7 +425,7 @@ module NEU
             shelf_location: child_text(node, "mods:shelfLocator"),
             url: child_text(node, "mods:url")
           }
-          entry if entry.values.any?
+          entry.merge(qualifiers_of(node)) if entry.values.any?
         end
       end
 
@@ -394,7 +440,8 @@ module NEU
             projection: child_text(node, "mods:projection"),
             coordinates: child_text(node, "mods:coordinates")
           }
-          entry if entry.values.any?
+          # cartographics carries neither attribute; the enclosing subject does.
+          entry.merge(qualifiers_of(node.parent)) if entry.values.any?
         end
       end
 
@@ -412,7 +459,7 @@ module NEU
       def host_collections
         doc.xpath("/mods:mods/mods:relatedItem[@type='host']", NAMESPACE).filter_map do |node|
           entry = { title: child_text(node, "mods:titleInfo/mods:title"), **host_part(node) }
-          entry if entry.values.any?
+          entry.merge(qualifiers_of(node)) if entry.values.any?
         end
       end
 
@@ -439,7 +486,7 @@ module NEU
           next if NAMED_RELATED_ITEM_TYPES.include?(type)
 
           title = clean(node.at_xpath("mods:titleInfo/mods:title", NAMESPACE)&.text)
-          { type: type, title: title } if title
+          { type: type, title: title, **qualifiers_of(node) } if title
         end
       end
 
@@ -455,13 +502,24 @@ module NEU
       def identifiers
         doc.xpath("/mods:mods/mods:identifier", NAMESPACE).filter_map do |node|
           value = clean(node.text)
-          { type: clean(node["type"]), value: value, invalid: attr_value(node, "invalid") == "yes" } if value
+          if value
+            { type: clean(node["type"]), value: value, invalid: attr_value(node, "invalid") == "yes",
+              **qualifiers_of(node) }
+          end
         end
       end
 
       def permanent_url
         node = doc.at_xpath("/mods:mods/mods:identifier[@type='hdl']", NAMESPACE)
         node && clean(node.text)
+      end
+
+      # The handle identifier carries @displayLabel="Permanent URL" in Atlas's
+      # own MODS template, so the header a reader sees is one the record states
+      # rather than one a decorator invents. No href companion: the value is the
+      # URL.
+      def permanent_url_display_label
+        attr_value(doc.at_xpath("/mods:mods/mods:identifier[@type='hdl']", NAMESPACE), "displayLabel")
       end
 
       # The eleven children the XSD allows under hierarchicalGeographic, in the
@@ -628,6 +686,7 @@ module NEU
       FIELDS = {
         # titles
         main_title: :one,
+        main_title_display_label: :one,
         alternative_title: :many,
         uniform_title: :many,
         translated_title: :many,
@@ -636,6 +695,8 @@ module NEU
         names: :many,
         languages: :many,
         abstract: :one,
+        abstract_display_label: :one,
+        abstract_href: :one,
 
         # origin
         publication_information: :many,
@@ -698,6 +759,7 @@ module NEU
 
         # physical description
         resource_type: :many,
+        target_audience: :many,
         genres: :many,
         format: :many,
         extent: :many,
@@ -730,13 +792,20 @@ module NEU
         identifiers: :many,
         classification: :many,
         permanent_url: :one,
+        permanent_url_display_label: :one,
         record_info: :one,
         location: :many,
 
         # access
         access_condition: :one,
+        access_condition_display_label: :one,
+        access_condition_href: :one,
         use_and_reproduction: :one,
-        restriction_on_access: :one
+        use_and_reproduction_display_label: :one,
+        use_and_reproduction_href: :one,
+        restriction_on_access: :one,
+        restriction_on_access_display_label: :one,
+        restriction_on_access_href: :one
       }.freeze
 
       # The complete read projection, keyed to Atlas's Metadata::MODS attribute
@@ -762,6 +831,11 @@ module NEU
       # field name, and #access_title_parts is the descriptive name for what it
       # returns. Kept as an alias rather than a rename so both read well.
       def main_title = access_title_parts
+
+      # What the record wants the title row headed, which is almost never set --
+      # but a record that does set it means it, and "Title" is the one header a
+      # display would otherwise never let a curator change.
+      def main_title_display_label = attr_value(primary_title_info, "displayLabel")
 
       private
 
@@ -874,6 +948,68 @@ module NEU
         value.empty? ? nil : value
       end
 
+      # The two attributes a display reads off an element rather than out of its
+      # text: the header the record asked for, and the link the record attached.
+      # MODS puts them on the same 26 elements, so they travel together as one
+      # pair rather than as two parallel projections a consumer has to zip.
+      #
+      # An href with no text displays nothing. Every caller drops a value-less
+      # element already, which is also what the librarians asked for: a link
+      # needs something to hang on.
+      def qualifiers_of(node)
+        { display_label: attr_value(node, "displayLabel"), href: xlink_href(node) }
+      end
+
+      # xlink:href by namespace rather than by prefix. A document is free to
+      # bind the XLink namespace to any prefix, or to none, and node["xlink:href"]
+      # matches the literal prefix alone.
+      def xlink_href(node)
+        return nil unless node
+
+        attribute = node.attribute_with_ns("href", XLINK_NAMESPACE)
+        attribute && clean(attribute.value)
+      end
+
+      # A displayed value plus the qualifiers of the element a display takes its
+      # header from. That is not always the element holding the text: MODS puts
+      # @displayLabel on originInfo and physicalDescription, never on the
+      # publisher, place, extent or digitalOrigin inside them.
+      def labeled(value, label_node)
+        { value: value, **qualifiers_of(label_node) }
+      end
+
+      # #texts_at, with each value carrying the qualifiers of its element.
+      # `from:` is an XPath relative to the text-bearing node, naming the
+      # ancestor the header comes from instead.
+      def labeled_texts_at(xpath, from: nil)
+        doc.xpath(xpath, NAMESPACE).filter_map do |node|
+          value = clean(node.text)
+          labeled(value, from ? node.at_xpath(from, NAMESPACE) : node) if value
+        end
+      end
+
+      # The first of a node set to state the attribute. A field joining several
+      # elements into one value has one header, and a record that labels only
+      # its second abstract still meant the label.
+      def first_attr(nodes, name)
+        nodes.filter_map { |node| attr_value(node, name) }.first
+      end
+
+      def first_href(nodes)
+        nodes.filter_map { |node| xlink_href(node) }.first
+      end
+
+      # Every top-level accessCondition, or those of one folded @type. Shared by
+      # the joined text projections and by the qualifier companions, so a header
+      # cannot come from a different element than the value it heads.
+      def access_condition_nodes(type = nil)
+        nodes = doc.xpath("/mods:mods/mods:accessCondition", NAMESPACE)
+        return nodes if type.nil?
+
+        wanted = Projection.fold_type(type)
+        nodes.select { |node| Projection.fold_type(node["type"]) == wanted }
+      end
+
       # Byte-faithful title parts off any titleInfo node, shared by #title_parts
       # (which Cerberus pre-fills its edit forms from) and the variant titles.
       def title_parts_of(node)
@@ -899,7 +1035,8 @@ module NEU
       def variant_titles(type)
         doc.xpath("/mods:mods/mods:titleInfo[@type='#{type}']", NAMESPACE).filter_map do |node|
           parts = title_parts_of(node).transform_values { |value| NEU::MODS.normalize(value.to_s) }
-          clean(Projection.compose_title(parts))
+          value = clean(Projection.compose_title(parts))
+          labeled(value, node) if value
         end
       end
 
@@ -936,7 +1073,7 @@ module NEU
       end
 
       def related_item_titles(type)
-        texts_at("/mods:mods/mods:relatedItem[@type='#{type}']/mods:titleInfo/mods:title")
+        labeled_texts_at("/mods:mods/mods:relatedItem[@type='#{type}']/mods:titleInfo/mods:title", from: "../..")
       end
 
       # Kept in parts rather than composed into "24(3), pp. 210-218". The
@@ -1084,10 +1221,7 @@ module NEU
       # A genuinely unrecognised type still falls through, which is what
       # #access_condition is for.
       def access_conditions_of_type(type)
-        wanted = Projection.fold_type(type)
-        nodes = doc.xpath("/mods:mods/mods:accessCondition", NAMESPACE)
-                   .select { |node| Projection.fold_type(node["type"]) == wanted }
-        join_paragraphs(nodes)
+        join_paragraphs(access_condition_nodes(type))
       end
 
       def join_paragraphs(nodes)

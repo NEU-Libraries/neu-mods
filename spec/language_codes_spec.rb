@@ -68,16 +68,18 @@ RSpec.describe NEU::MODS::LanguageCodes do
         <mods:languageTerm type="code">eng</mods:languageTerm>
         <mods:languageTerm type="text">English (US)</mods:languageTerm>
       XML
-      expect(doc_with_language(term).languages).to eq([{ term: "English (US)", object_part: nil, script: nil }])
+      expect(without_qualifiers(doc_with_language(term).languages)).to eq([{ term: "English (US)", object_part: nil,
+                                                                             script: nil }])
     end
 
     it "translates a code-only term" do
       term = %(<mods:languageTerm type="code" authority="iso639-2b">eng</mods:languageTerm>)
-      expect(doc_with_language(term).languages).to eq([{ term: "English", object_part: nil, script: nil }])
+      expect(without_qualifiers(doc_with_language(term).languages)).to eq([{ term: "English", object_part: nil,
+                                                                             script: nil }])
     end
 
     it "translates a languageTerm carrying no @type at all" do
-      expect(doc_with_language("<mods:languageTerm>fre</mods:languageTerm>").languages)
+      expect(without_qualifiers(doc_with_language("<mods:languageTerm>fre</mods:languageTerm>").languages))
         .to eq([{ term: "French", object_part: nil, script: nil }])
     end
 
@@ -91,7 +93,7 @@ RSpec.describe NEU::MODS::LanguageCodes do
       term = <<~XML
         <mods:languageTerm type="code" authority="iso639-2b">spa</mods:languageTerm>
       XML
-      expect(doc_with_language(term, %(objectPart="subtitles")).languages)
+      expect(without_qualifiers(doc_with_language(term, %(objectPart="subtitles")).languages))
         .to eq([{ term: "Spanish", object_part: "subtitles", script: nil }])
     end
 

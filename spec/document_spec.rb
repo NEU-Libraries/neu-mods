@@ -73,7 +73,7 @@ RSpec.describe NEU::MODS::Document do
       expect(reparsed.title_parts[:part_name]).to eq("How We Respond to Disaster")
       expect(reparsed.title_parts[:part_number]).to eq("Episode 1")
       # the nested series title is untouched
-      expect(reparsed.related_series).to eq(["What's New Podcast"])
+      expect(values_of(reparsed.related_series)).to eq(["What's New Podcast"])
     end
   end
 
@@ -346,11 +346,11 @@ RSpec.describe NEU::MODS::Document do
       aggregate_failures do
         expect(minimal.plain_title).to eq("Bare")
         expect(minimal.abstract).to eq("")
-        expect(minimal.resource_type).to eq([]) # repeatable, absent -> []
+        expect(values_of(minimal.resource_type)).to eq([]) # repeatable, absent -> []
         expect(minimal.permanent_url).to be_nil # node absent -> nil (Atlas parity)
         expect(minimal.date_created).to be_nil
         expect(minimal.date_created_precision).to be_nil
-        expect(minimal.names).to eq([])
+        expect(without_qualifiers(minimal.names)).to eq([])
         expect(minimal.topical_subjects).to eq([])
       end
     end

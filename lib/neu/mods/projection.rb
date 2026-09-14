@@ -587,6 +587,17 @@ module NEU
       # wrote survives in the matching *_text field instead.
       W3CDTF_DATE = /\A(\d{4})(?:-(\d{2})(?:-(\d{2})(T\S+)?)?)?\z/
 
+      # ISO 8601 basic format: the same year, month and day written without the
+      # hyphens. Accepted ONLY where the record declares @encoding="iso8601",
+      # because eight bare digits are a date only because the encoding says so
+      # -- an accession number is eight digits too, and guessing is the mistake
+      # dropping the DateTime.parse fallback exists to prevent.
+      ISO8601_BASIC_DATE = /\A(\d{4})(?:(\d{2})(?:(\d{2})(T\S+)?)?)?\z/
+
+      # @encoding, folded. MODS leaves the attribute an open string and records
+      # write "iso8601" and "ISO-8601" alike.
+      ISO8601_ENCODING = "iso8601"
+
       # What #date_parts returns when the element is absent entirely, so an
       # absent date is distinguishable from one present and unparseable.
       EMPTY_DATE = { value: nil, precision: nil, end_value: nil, end_precision: nil,
@@ -908,27 +919,40 @@ module NEU
 
       # --- helpers -------------------------------------------------------------
 
-      # [DateTime, precision] for a w3cdtf date, or nil for a string that is not
-      # one. A shape-matched but impossible date (2026-13, 2026-02-30) reaches
-      # DateTime, raises, and is nil like any other unreadable value; the caller
-      # keeps its literal text.
+      # [DateTime, precision] for a string matching one date shape, or nil for a
+      # string that matches none. A shape-matched but impossible date (2026-13,
+      # 2026-02-30) reaches DateTime, raises, and is nil like any other
+      # unreadable value; the caller keeps its literal text.
       #
       # A full timestamp goes through DateTime.parse rather than being rebuilt,
       # so the time of day a dateModified declares survives. Its precision is
       # "day" because that is the finest granularity a consumer renders.
-      def parse_w3cdtf(str)
-        m = W3CDTF_DATE.match(str)
+      def parse_shaped_date(regexp, str)
+        m = regexp.match(str)
         return nil unless m
         return [DateTime.parse(str), "day"] if m[4]
 
-        [DateTime.new(m[1].to_i, (m[2] || 1).to_i, (m[3] || 1).to_i), w3cdtf_precision(m)]
+        [DateTime.new(m[1].to_i, (m[2] || 1).to_i, (m[3] || 1).to_i), declared_precision(m)]
       rescue Date::Error
         nil
       end
 
+      # [DateTime, precision], reading the shape the record's own @encoding
+      # declares. w3cdtf is tried first and unconditionally, because it is what
+      # the corpus and Atlas's own MODS template write; the basic ISO form is
+      # tried only for a record that asked for it.
+      def parse_declared_date(str, encoding)
+        parse_shaped_date(W3CDTF_DATE, str) ||
+          (iso8601?(encoding) ? parse_shaped_date(ISO8601_BASIC_DATE, str) : nil)
+      end
+
+      def iso8601?(encoding)
+        encoding.to_s.downcase.delete("-") == ISO8601_ENCODING
+      end
+
       # The granularity the record stopped at, which is the whole point of
       # matching the shape rather than widening the parse.
-      def w3cdtf_precision(match)
+      def declared_precision(match)
         return "day" if match[3]
 
         match[2] ? "month" : "year"
@@ -1008,7 +1032,7 @@ module NEU
         str = NEU::MODS.canonical_ws(node.text)
         return [nil, nil, nil] if str.empty?
 
-        parsed = parse_w3cdtf(str)
+        parsed = parse_declared_date(str, attr_value(node, "encoding"))
         return [parsed[0], parsed[1], nil] if parsed
 
         [nil, nil, str]

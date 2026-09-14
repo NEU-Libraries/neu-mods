@@ -349,4 +349,70 @@ RSpec.describe "2026-09-14 UAT projection changes" do
       expect(doc.names.first[:alternative_names]).to eq([])
     end
   end
+
+  describe "the ISO 8601 date encoding" do
+    def dated(body)
+      parse("<mods:originInfo>#{body}</mods:originInfo>")
+    end
+
+    it "reads the basic form a record declares as iso8601" do
+      doc = dated(%(<mods:dateCreated encoding="iso8601">19350601</mods:dateCreated>))
+      aggregate_failures do
+        expect(doc.date_created).to eq(DateTime.new(1935, 6, 1))
+        expect(doc.date_created_precision).to eq("day")
+        expect(doc.date_created_text).to be_nil
+      end
+    end
+
+    it "keeps the precision the basic form stopped at" do
+      aggregate_failures do
+        expect(dated(%(<mods:dateCreated encoding="iso8601">193506</mods:dateCreated>)).date_created_precision)
+          .to eq("month")
+        expect(dated(%(<mods:dateCreated encoding="iso8601">1935</mods:dateCreated>)).date_created_precision)
+          .to eq("year")
+      end
+    end
+
+    it "reads a basic timestamp" do
+      doc = dated(%(<mods:dateModified encoding="iso8601">19350601T100000</mods:dateModified>))
+      expect(doc.date_modified).to eq(DateTime.new(1935, 6, 1, 10, 0, 0))
+    end
+
+    it "folds the spelling of the encoding a record wrote" do
+      doc = dated(%(<mods:dateCreated encoding="ISO-8601">19350601</mods:dateCreated>))
+      expect(doc.date_created).to eq(DateTime.new(1935, 6, 1))
+    end
+
+    it "still reads the extended form under the iso8601 encoding" do
+      doc = dated(%(<mods:dateCreated encoding="iso8601">1935-06-01</mods:dateCreated>))
+      expect(doc.date_created).to eq(DateTime.new(1935, 6, 1))
+    end
+
+    # Eight bare digits are a date only because the encoding says so. Reading
+    # them without it is the guess that dropping the DateTime.parse fallback
+    # exists to prevent.
+    it "does not read eight bare digits the record did not call a date" do
+      doc = dated("<mods:dateCreated>19350601</mods:dateCreated>")
+      aggregate_failures do
+        expect(doc.date_created).to be_nil
+        expect(doc.date_created_text).to eq("19350601")
+      end
+    end
+
+    it "keeps the literal of an iso8601 value that is not a date either" do
+      doc = dated(%(<mods:dateCreated encoding="iso8601">19uu</mods:dateCreated>))
+      aggregate_failures do
+        expect(doc.date_created).to be_nil
+        expect(doc.date_created_text).to eq("19uu")
+      end
+    end
+
+    it "refuses an impossible date under either encoding" do
+      doc = dated(%(<mods:dateCreated encoding="iso8601">19350230</mods:dateCreated>))
+      aggregate_failures do
+        expect(doc.date_created).to be_nil
+        expect(doc.date_created_text).to eq("19350230")
+      end
+    end
+  end
 end

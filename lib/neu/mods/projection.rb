@@ -53,17 +53,25 @@ module NEU
       # :non_sort :title :subtitle :part_name :part_number (nil or "" for absent).
       # Returns "" when there is no title. Exposed as NEU::MODS.compose_title.
       #
-      # The part NUMBER precedes the part NAME. titleInfo is an unordered choice
-      # in the schema, so no document order is available to follow, and a fixed
-      # order that put the name first read the number as a trailing qualifier on
-      # the section rather than as the section it numbers. Cataloguing practice
-      # is "Part 2. The Marshes". The separator travels with the part, not with
-      # the position, so the swap moves the comma with the number.
+      # nonSort, title, subtitle, partName, partNumber -- the order the
+      # librarians settled on 2026-09-14. titleInfo is an unordered choice in
+      # the schema, so no document order is available to follow and the
+      # composer has to fix one.
+      #
+      # A period separates the title or subtitle from the parts, and one part
+      # from the next. The separator travels with its part rather than with the
+      # position, so a record giving only a partNumber still gets the period.
+      # Nothing is appended after the last part: a title is a value, not a
+      # sentence, and a trailing period reads as part of the title everywhere
+      # the value is re-used.
+      TITLE_SEPARATORS = [[": ", :subtitle], [". ", :part_name], [". ", :part_number]].freeze
+
       def self.compose_title(parts)
         return "" if parts[:title].to_s.strip.empty?
 
-        optional = { ": " => parts[:subtitle], ", " => parts[:part_number], " - " => parts[:part_name] }
-        suffix = optional.filter_map { |sep, val| "#{sep}#{val}" unless val.to_s.strip.empty? }.join
+        suffix = TITLE_SEPARATORS.filter_map do |separator, key|
+          "#{separator}#{parts[key]}" unless parts[key].to_s.strip.empty?
+        end.join
         "#{join_non_sort(parts[:non_sort], parts[:title])}#{suffix}"
       end
 

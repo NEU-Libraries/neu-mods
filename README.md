@@ -27,7 +27,7 @@ require "neu-mods"
 doc = NEU::MODS::Document.parse(xml_string)
 
 # Projection (plain data)
-doc.plain_title    # => "What's New, Episode 1 - How We Respond to Disaster"
+doc.plain_title    # => "What's New. How We Respond to Disaster. Episode 1"
 doc.title_parts    # => { non_sort:, subtitle:, title:, part_name:, part_number: }
                    #    byte-faithful -- the edit forms pre-fill from these
 doc.abstract       # => normalized, paragraph-joined String
@@ -127,7 +127,7 @@ NEU::MODS::FIELDS  # => { main_title: :one, names: :many, ... }
 # the parts (e.g. Atlas's access-copy model) and must not re-parse XML on read.
 NEU::MODS.compose_title(non_sort: "", title: "What's New",
                         part_name: "How We Respond to Disaster", part_number: "Episode 1")
-# => "What's New, Episode 1 - How We Respond to Disaster"   (== doc.plain_title)
+# => "What's New. How We Respond to Disaster. Episode 1"   (== doc.plain_title)
 # The part NUMBER precedes the part NAME: "Part 2. The Marshes" is the
 # cataloguing convention, and titleInfo is an unordered choice in the schema.
 

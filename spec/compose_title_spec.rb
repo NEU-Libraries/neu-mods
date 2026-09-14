@@ -6,23 +6,46 @@
 # XML on the read path). Document#plain_title is the same logic over title_parts;
 # the conformance/document specs pin its XML-driven behavior.
 RSpec.describe "NEU::MODS.compose_title" do
-  # The number precedes the name: "Part 2. The Marshes" is the cataloguing
-  # convention, and the schema's unordered choice gives no document order to
-  # follow instead. The separator travels with its part, so the comma moves
-  # with the number.
-  it "composes all parts in order: non_sort+title, : subtitle, , part_number, - part_name" do
+  # nonSort, title, subtitle, partName, partNumber, the order the librarians
+  # settled on 2026-09-14. The schema's unordered choice gives no document
+  # order to follow, so the composer fixes one. A period separates the title
+  # or subtitle from the parts, and one part from the next.
+  it "composes all parts in order: non_sort+title, : subtitle, . part_name, . part_number" do
     parts = {
       non_sort: "The ", title: "Hobbit", subtitle: "There and Back Again",
       part_name: "Book One", part_number: "Episode 1"
     }
     expect(NEU::MODS.compose_title(parts))
-      .to eq("The Hobbit: There and Back Again, Episode 1 - Book One")
+      .to eq("The Hobbit: There and Back Again. Book One. Episode 1")
   end
 
   it "drops absent optional parts (nil or blank) but keeps non_sort+title" do
     expect(NEU::MODS.compose_title(non_sort: "", title: "What's New",
                                    part_name: "How We Respond", part_number: "Episode 1"))
-      .to eq("What's New, Episode 1 - How We Respond")
+      .to eq("What's New. How We Respond. Episode 1")
+  end
+
+  # The separator travels with its part, not with the position, so a record
+  # giving one part gets one period rather than the pair's.
+  it "gives a lone part its own period" do
+    aggregate_failures do
+      expect(NEU::MODS.compose_title(title: "Atlas", part_number: "2")).to eq("Atlas. 2")
+      expect(NEU::MODS.compose_title(title: "Atlas", part_name: "The Marshes"))
+        .to eq("Atlas. The Marshes")
+    end
+  end
+
+  # A title is a value, not a sentence: a trailing period is re-read as part of
+  # the title everywhere the value travels -- a result heading, a breadcrumb,
+  # a citation, the Solr sort key.
+  it "appends no period after the last part" do
+    aggregate_failures do
+      expect(NEU::MODS.compose_title(title: "Atlas")).to eq("Atlas")
+      expect(NEU::MODS.compose_title(title: "Atlas", subtitle: "a survey"))
+        .to eq("Atlas: a survey")
+      expect(NEU::MODS.compose_title(title: "Atlas", part_name: "The Marshes", part_number: "2"))
+        .to eq("Atlas. The Marshes. 2")
+    end
   end
 
   it "returns just non_sort+title when only those are present" do
@@ -75,6 +98,6 @@ RSpec.describe "NEU::MODS.compose_title" do
   it "is what Document#plain_title delegates to (same result over title_parts)" do
     doc = NEU::MODS::Document.parse(fixture("work-mods.xml"))
     expect(doc.plain_title).to eq(NEU::MODS.compose_title(doc.title_parts))
-    expect(doc.plain_title).to eq("What's New, Episode 1 - How We Respond to Disaster")
+    expect(doc.plain_title).to eq("What's New. How We Respond to Disaster. Episode 1")
   end
 end

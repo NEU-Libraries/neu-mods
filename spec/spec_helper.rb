@@ -8,14 +8,17 @@ def fixture(name)
   File.read(File.join(FIXTURE_DIR, name))
 end
 
-# Every displayed projection now carries the @displayLabel and xlink:href of
-# the element a header comes from. A spec about what an entry holds BESIDE that
-# pair reads better without two nil keys repeated on every line, so it drops
-# them; the pair has its own expectations in uat_display_spec.rb.
-def without_qualifiers(value)
+# The attributes a display reads off an element rather than out of its text:
+# the header (@displayLabel), the link (xlink:href), and on a name the two the
+# 2026-09-14 UAT round added. A spec about what an entry holds BESIDE them
+# reads better without those keys repeated on every line, so it drops them;
+# each has its own expectations in uat_display_spec.rb.
+DISPLAY_ATTRIBUTES = %i[display_label href usage alternative_names].freeze
+
+def without_display_attributes(value)
   case value
-  when Array then value.map { |member| without_qualifiers(member) }
-  when Hash  then value.except(:display_label, :href)
+  when Array then value.map { |member| without_display_attributes(member) }
+  when Hash  then value.except(*DISPLAY_ATTRIBUTES)
   else value
   end
 end

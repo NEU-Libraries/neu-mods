@@ -350,7 +350,7 @@ RSpec.describe NEU::MODS::Document do
         expect(minimal.permanent_url).to be_nil # node absent -> nil (Atlas parity)
         expect(minimal.date_created).to be_nil
         expect(minimal.date_created_precision).to be_nil
-        expect(without_qualifiers(minimal.names)).to eq([])
+        expect(without_display_attributes(minimal.names)).to eq([])
         expect(minimal.topical_subjects).to eq([])
       end
     end

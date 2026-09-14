@@ -289,6 +289,7 @@ RSpec.describe "2026-09-14 UAT projection changes" do
       XML
       expect(doc.origin_agents).to eq(
         [{ name: "Adams, Ansel", roles: ["Photographer"], affiliation: [],
+           usage: nil, alternative_names: [],
            display_label: nil, href: nil, event_type: "production" }]
       )
     end
@@ -298,6 +299,54 @@ RSpec.describe "2026-09-14 UAT projection changes" do
         <mods:originInfo><mods:agent><mods:role><mods:roleTerm>pbl</mods:roleTerm></mods:role></mods:agent></mods:originInfo>
       XML
       expect(doc.origin_agents).to eq([])
+    end
+  end
+
+  describe "name @usage and alternativeName" do
+    it "carries the @usage a record puts on its principal name" do
+      doc = parse(<<~XML)
+        <mods:name type="personal" usage="primary">
+          <mods:namePart type="family">Adams</mods:namePart>
+        </mods:name>
+        <mods:name type="personal"><mods:namePart type="family">Doe</mods:namePart></mods:name>
+      XML
+      expect(doc.names.map { |entry| entry[:usage] }).to eq(["primary", nil])
+    end
+
+    # alternativeName carries @altType, not @type, so it composes with the
+    # enclosing name's type -- read from its own attributes a personal
+    # alternative would compose "Doe Jane" under a name composing "Doe, Jane".
+    it "composes an alternativeName with the enclosing name's type" do
+      doc = parse(<<~XML)
+        <mods:name type="personal">
+          <mods:namePart type="family">Clemens</mods:namePart>
+          <mods:namePart type="given">Samuel</mods:namePart>
+          <mods:alternativeName altType="pseudonym">
+            <mods:namePart type="family">Twain</mods:namePart>
+            <mods:namePart type="given">Mark</mods:namePart>
+          </mods:alternativeName>
+        </mods:name>
+      XML
+      entry = doc.names.first
+      aggregate_failures do
+        expect(entry[:name]).to eq("Clemens, Samuel")
+        expect(entry[:alternative_names]).to eq(["Twain, Mark"])
+      end
+    end
+
+    it "reads a corporate alternativeName as a corporate name" do
+      doc = parse(<<~XML)
+        <mods:name type="corporate">
+          <mods:namePart>Northeastern University Library</mods:namePart>
+          <mods:alternativeName><mods:namePart>Snell Library</mods:namePart></mods:alternativeName>
+        </mods:name>
+      XML
+      expect(doc.names.first[:alternative_names]).to eq(["Snell Library"])
+    end
+
+    it "gives a name with no alternative an empty list rather than nil" do
+      doc = parse(%(<mods:name type="personal"><mods:namePart>Jane Doe</mods:namePart></mods:name>))
+      expect(doc.names.first[:alternative_names]).to eq([])
     end
   end
 end

@@ -234,8 +234,25 @@ module NEU
           name: name_display_value_w_date(node),
           roles: name_roles(node),
           affiliation: texts_under(node, "mods:affiliation"),
+          # @usage is fixed="primary" in the schema and exists to nominate the
+          # principal name. A record that sets it has said which name leads,
+          # and without it a consumer grouping role-less names can only guess.
+          usage: attr_value(node, "usage"),
+          alternative_names: alternative_names(node),
           **qualifiers_of(node)
         }
+      end
+
+      # mods:alternativeName, new in MODS 3.7: a second form of the same name,
+      # not a second name. Composed with the ENCLOSING name's @type, because
+      # alternativeName carries @altType rather than @type and an alternative
+      # for a personal name is still a personal name -- read from its own
+      # attributes it would compose "Doe Jane" where the name above it
+      # composes "Doe, Jane".
+      def alternative_names(node)
+        node.xpath("mods:alternativeName", NAMESPACE).filter_map do |alt|
+          name_display_value_w_date(alt, attr_value(node, "type"))
+        end
       end
 
       # All top-level names as { name:, roles: }. `name` reproduces the `mods` gem's
@@ -1323,8 +1340,8 @@ module NEU
       # `<namePart>\n  Doe\n</namePart>` -- what a pretty-printer writes and what
       # a curator pasting from a form leaves behind -- composed as "Doe ,  John",
       # and the outer strip could not reach the spaces around the comma.
-      def name_display_value_w_date(node)
-        dv = name_display_value(node)
+      def name_display_value_w_date(node, type = attr_value(node, "type"))
+        dv = name_display_value(node, type)
         node.xpath("mods:namePart[@type='date']", NAMESPACE).each do |np|
           d = part_text(np)
           dv += ", #{d}" unless d.empty? || dv.end_with?(d)
@@ -1333,15 +1350,11 @@ module NEU
         dv.strip.empty? ? nil : dv.strip
       end
 
-      def name_display_value(node)
+      def name_display_value(node, type)
         display_form = part_text(node.at_xpath("mods:displayForm", NAMESPACE))
         return display_form unless display_form.empty?
 
-        if node["type"] == "personal"
-          personal_display_value(node)
-        else
-          non_date_parts_joined(node)
-        end
+        type == "personal" ? personal_display_value(node) : non_date_parts_joined(node)
       end
 
       def personal_display_value(node)

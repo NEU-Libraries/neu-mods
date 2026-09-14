@@ -73,7 +73,7 @@ RSpec.describe "projection coverage" do
       aggregate_failures do
         expect(seeded.topical_subjects).to eq(["Interpreting"])
         expect(values_of(seeded.genres)).to eq([])
-        expect(without_qualifiers(seeded.identifiers)).to eq([])
+        expect(without_display_attributes(seeded.identifiers)).to eq([])
         expect(seeded.permanent_url).to be_nil
       end
     end
@@ -221,11 +221,11 @@ RSpec.describe "projection coverage" do
     end
 
     it "keeps each note's @type, which changes what the note means" do
-      expect(without_qualifiers(doc.notes)).to eq([
-                                                    { type: "statement of responsibility",
-                                                      value: "Prepared by the Working Group." },
-                                                    { type: nil, value: "A general note." }
-                                                  ])
+      expect(without_display_attributes(doc.notes)).to eq([
+                                                            { type: "statement of responsibility",
+                                                              value: "Prepared by the Working Group." },
+                                                            { type: nil, value: "A general note." }
+                                                          ])
     end
 
     it "projects the remaining subject axes" do
@@ -246,7 +246,7 @@ RSpec.describe "projection coverage" do
       XML
       aggregate_failures do
         expect(values_of(scanned.physical_description_notes)).to eq(["Scanned at 600 dpi."])
-        expect(without_qualifiers(scanned.notes)).to eq([{ type: nil, value: "A general note." }])
+        expect(without_display_attributes(scanned.notes)).to eq([{ type: nil, value: "A general note." }])
       end
     end
 
@@ -260,19 +260,19 @@ RSpec.describe "projection coverage" do
           </mods:subject>
           <mods:subject authority="lcsh"><mods:topic>Coastal ecology</mods:topic></mods:subject>
         XML
-        expect(without_qualifiers(lcsh.subject_headings)).to eq([
-                                                                  { parts: ["Salt marshes", "Massachusetts",
-                                                                            "20th century"] },
-                                                                  { parts: ["Coastal ecology"] }
-                                                                ])
+        expect(without_display_attributes(lcsh.subject_headings)).to eq([
+                                                                          { parts: ["Salt marshes", "Massachusetts",
+                                                                                    "20th century"] },
+                                                                          { parts: ["Coastal ecology"] }
+                                                                        ])
       end
 
       it "reads a heading typed flat into one element as the same parts" do
         flat = doc_with(<<~XML)
           <mods:subject><mods:topic>Salt marshes--Massachusetts--20th century</mods:topic></mods:subject>
         XML
-        expect(without_qualifiers(flat.subject_headings)).to eq([{ parts: ["Salt marshes", "Massachusetts",
-                                                                           "20th century"] }])
+        expect(without_display_attributes(flat.subject_headings)).to eq([{ parts: ["Salt marshes", "Massachusetts",
+                                                                                   "20th century"] }])
       end
 
       it "composes a name and a title part through their own display ports" do
@@ -288,10 +288,11 @@ RSpec.describe "projection coverage" do
             <mods:titleInfo><mods:nonSort>The</mods:nonSort><mods:title>Real Thing</mods:title></mods:titleInfo>
           </mods:subject>
         XML
-        expect(without_qualifiers(composed.subject_headings)).to eq([
-                                                                      { parts: ["Bell, Jen", "Correspondence"] },
-                                                                      { parts: ["The Real Thing"] }
-                                                                    ])
+        expect(without_display_attributes(composed.subject_headings)).to eq([
+                                                                              { parts: ["Bell, Jen",
+                                                                                        "Correspondence"] },
+                                                                              { parts: ["The Real Thing"] }
+                                                                            ])
       end
 
       it "makes each hierarchical level a step of the heading" do
@@ -304,8 +305,8 @@ RSpec.describe "projection coverage" do
             </mods:hierarchicalGeographic>
           </mods:subject>
         XML
-        expect(without_qualifiers(place.subject_headings)).to eq([{ parts: ["United States", "New York",
-                                                                            "Parksville"] }])
+        expect(without_display_attributes(place.subject_headings)).to eq([{ parts: ["United States", "New York",
+                                                                                    "Parksville"] }])
       end
 
       it "omits the two children that carry no heading text" do
@@ -316,7 +317,7 @@ RSpec.describe "projection coverage" do
             <mods:cartographics><mods:coordinates>42.36,-71.06</mods:coordinates></mods:cartographics>
           </mods:subject>
         XML
-        expect(without_qualifiers(omitted.subject_headings)).to eq([{ parts: ["Boston"] }])
+        expect(without_display_attributes(omitted.subject_headings)).to eq([{ parts: ["Boston"] }])
       end
 
       it "drops a subject whose children are all blank or omitted" do
@@ -324,7 +325,7 @@ RSpec.describe "projection coverage" do
           <mods:subject><mods:topic></mods:topic></mods:subject>
           <mods:subject><mods:geographicCode>n-us-ma</mods:geographicCode></mods:subject>
         XML
-        expect(without_qualifiers(empty.subject_headings)).to eq([])
+        expect(without_display_attributes(empty.subject_headings)).to eq([])
       end
 
       it "leaves the per-axis fields alone, since the facets read them" do
@@ -368,7 +369,7 @@ RSpec.describe "projection coverage" do
 
     it "projects the host collection alongside the series" do
       aggregate_failures do
-        expect(without_qualifiers(doc.host_collections)).to eq([{ title: "A Host Collection" }])
+        expect(without_display_attributes(doc.host_collections)).to eq([{ title: "A Host Collection" }])
         expect(values_of(doc.related_series)).to eq(["A Series"])
       end
     end
@@ -384,8 +385,9 @@ RSpec.describe "projection coverage" do
           </mods:part>
         </mods:relatedItem>
       XML
-      expect(without_qualifiers(article.host_collections)).to eq([{ title: "Estuaries", volume: "24", issue: "3",
-                                                                    start_page: "210", end_page: "218" }])
+      expect(without_display_attributes(article.host_collections)).to eq(
+        [{ title: "Estuaries", volume: "24", issue: "3", start_page: "210", end_page: "218" }]
+      )
     end
 
     it "reads a page extent that omits @unit, which MODS leaves optional" do
@@ -395,7 +397,7 @@ RSpec.describe "projection coverage" do
           <mods:part><mods:extent><mods:start>210</mods:start></mods:extent></mods:part>
         </mods:relatedItem>
       XML
-      expect(without_qualifiers(unitless.host_collections)).to eq([{ title: "Estuaries", start_page: "210" }])
+      expect(without_display_attributes(unitless.host_collections)).to eq([{ title: "Estuaries", start_page: "210" }])
     end
 
     it "omits the part members a record does not carry rather than nilling them" do
@@ -405,7 +407,7 @@ RSpec.describe "projection coverage" do
           <mods:part><mods:detail type="volume"><mods:number>24</mods:number></mods:detail></mods:part>
         </mods:relatedItem>
       XML
-      expect(without_qualifiers(volume_only.host_collections)).to eq([{ title: "Estuaries", volume: "24" }])
+      expect(without_display_attributes(volume_only.host_collections)).to eq([{ title: "Estuaries", volume: "24" }])
     end
 
     # A host block carrying volume, issue and pages but no titleInfo used to
@@ -419,12 +421,12 @@ RSpec.describe "projection coverage" do
           </mods:part>
         </mods:relatedItem>
       XML
-      expect(without_qualifiers(titleless.host_collections)).to eq([{ title: nil, issue: "3" }])
+      expect(without_display_attributes(titleless.host_collections)).to eq([{ title: nil, issue: "3" }])
     end
 
     it "drops a host that carries neither a title nor a part" do
       empty = doc_with('<mods:relatedItem type="host"><mods:note>Nothing</mods:note></mods:relatedItem>')
-      expect(without_qualifiers(empty.host_collections)).to eq([])
+      expect(without_display_attributes(empty.host_collections)).to eq([])
     end
 
     # part/date is the article's year within the host -- after the title, the
@@ -439,7 +441,7 @@ RSpec.describe "projection coverage" do
           </mods:part>
         </mods:relatedItem>
       XML
-      expect(without_qualifiers(dated.host_collections))
+      expect(without_display_attributes(dated.host_collections))
         .to eq([{ title: "Estuaries", date: "1998", text: "Special issue" }])
     end
 
@@ -460,7 +462,7 @@ RSpec.describe "projection coverage" do
           </mods:part>
         </mods:relatedItem>
       XML
-      expect(without_qualifiers(chaptered.host_collections))
+      expect(without_display_attributes(chaptered.host_collections))
         .to eq([{ title: "Salt Marshes", volume: "2",
                   details: [{ type: "chapter", number: "7", caption: "chap.", title: "Tidal Range" }] }])
     end
@@ -475,7 +477,7 @@ RSpec.describe "projection coverage" do
           </mods:part>
         </mods:relatedItem>
       XML
-      expect(without_qualifiers(recording.host_collections))
+      expect(without_display_attributes(recording.host_collections))
         .to eq([{ title: "Field Recordings", start_page: "1",
                   extents: [{ unit: "minutes", start: "0", end: "45", total: nil, list: nil }] }])
     end
@@ -491,23 +493,23 @@ RSpec.describe "projection coverage" do
     end
 
     it "catches every other relatedItem type, keeping the relationship" do
-      expect(without_qualifiers(doc.related_items)).to eq([{ type: "otherFormat", title: "The Print Edition" }])
+      expect(without_display_attributes(doc.related_items)).to eq([{ type: "otherFormat", title: "The Print Edition" }])
     end
 
     it "does not repeat a relatedItem that already has a field of its own" do
-      expect(without_qualifiers(doc.related_items).map { |item| item[:type] }).not_to include("host", "series")
+      expect(without_display_attributes(doc.related_items).map { |item| item[:type] }).not_to include("host", "series")
     end
 
     it "catches an untyped relatedItem, which no other field would carry" do
       untyped = doc_with(<<~XML)
         <mods:relatedItem><mods:titleInfo><mods:title>Something Related</mods:title></mods:titleInfo></mods:relatedItem>
       XML
-      expect(without_qualifiers(untyped.related_items)).to eq([{ type: nil, title: "Something Related" }])
+      expect(without_display_attributes(untyped.related_items)).to eq([{ type: nil, title: "Something Related" }])
     end
 
     it "skips a relatedItem with no title, which projects nothing useful" do
       titleless = doc_with(%(<mods:relatedItem type="original"><mods:note>See the file.</mods:note></mods:relatedItem>))
-      expect(without_qualifiers(titleless.related_items)).to eq([])
+      expect(without_display_attributes(titleless.related_items)).to eq([])
     end
 
     it "keeps a location's parts apart, so a URL is distinguishable from a shelf" do
@@ -518,9 +520,9 @@ RSpec.describe "projection coverage" do
           <mods:url>https://example.org/item</mods:url>
         </mods:location>
       XML
-      expect(without_qualifiers(located.location)).to eq([{ physical_location: "Snell Library",
-                                                            shelf_location: "PS3552 .E1",
-                                                            url: "https://example.org/item" }])
+      expect(without_display_attributes(located.location)).to eq([{ physical_location: "Snell Library",
+                                                                    shelf_location: "PS3552 .E1",
+                                                                    url: "https://example.org/item" }])
     end
 
     it "keeps cartographics structured rather than composing a sentence" do
@@ -533,9 +535,9 @@ RSpec.describe "projection coverage" do
           </mods:cartographics>
         </mods:subject>
       XML
-      expect(without_qualifiers(mapped.map_data)).to eq([{ scale: "1:24,000",
-                                                           projection: "Universal Transverse Mercator",
-                                                           coordinates: "W 71 03 00 N 42 21 00" }])
+      expect(without_display_attributes(mapped.map_data)).to eq([{ scale: "1:24,000",
+                                                                   projection: "Universal Transverse Mercator",
+                                                                   coordinates: "W 71 03 00 N 42 21 00" }])
     end
 
     it "projects each title variant under its own field" do
@@ -586,18 +588,18 @@ RSpec.describe "projection coverage" do
         <mods:identifier>2047/D20254217</mods:identifier>
       XML
 
-      expect(without_qualifiers(doc.identifiers)).to eq([
-                                                          { type: "doi", value: "10.1234/x", invalid: false },
-                                                          { type: "COLID", value: "bdr:12345", invalid: false },
-                                                          { type: nil, value: "2047/D20254217", invalid: false }
-                                                        ])
+      expect(without_display_attributes(doc.identifiers)).to eq([
+                                                                  { type: "doi", value: "10.1234/x", invalid: false },
+                                                                  { type: "COLID", value: "bdr:12345", invalid: false },
+                                                                  { type: nil, value: "2047/D20254217", invalid: false }
+                                                                ])
     end
 
     # In MODS the attribute means the identifier is cancelled, superseded or
     # wrong. Unmarked, a dead ISBN invites a reader to go and use it.
     it "keeps the @invalid flag a record puts on a cancelled identifier" do
       doc = doc_with(%(<mods:identifier type="isbn" invalid="yes">0000000000</mods:identifier>))
-      expect(without_qualifiers(doc.identifiers)).to eq([{ type: "isbn", value: "0000000000", invalid: true }])
+      expect(without_display_attributes(doc.identifiers)).to eq([{ type: "isbn", value: "0000000000", invalid: true }])
     end
 
     it "still resolves the permanent URL off the hdl identifier" do
@@ -617,7 +619,7 @@ RSpec.describe "projection coverage" do
           <mods:role><mods:roleTerm type="text">Contributor</mods:roleTerm></mods:role>
         </mods:name>
       XML
-      expect(without_qualifiers(two_roles.names).first[:roles]).to eq(%w[Creator Contributor])
+      expect(without_display_attributes(two_roles.names).first[:roles]).to eq(%w[Creator Contributor])
     end
 
     it "gives a name with no role an empty list, not a nil member" do
@@ -642,7 +644,7 @@ RSpec.describe "projection coverage" do
           <mods:role><mods:roleTerm type="code">edt</mods:roleTerm></mods:role>
         </mods:name>
       XML
-      expect(without_qualifiers(roles_only.names)).to eq([])
+      expect(without_display_attributes(roles_only.names)).to eq([])
     end
 
     # #preserved_names is the list that tells a curator what the XML holds, so
@@ -653,7 +655,8 @@ RSpec.describe "projection coverage" do
           <mods:role><mods:roleTerm type="code">edt</mods:roleTerm></mods:role>
         </mods:name>
       XML
-      expect(without_qualifiers(roles_only.preserved_names)).to eq([{ name: nil, roles: ["edt"], affiliation: [] }])
+      expect(without_display_attributes(roles_only.preserved_names)).to eq([{ name: nil, roles: ["edt"],
+                                                                              affiliation: [] }])
     end
 
     # The simple form writes one Creator role back, so it must not claim a name
@@ -670,7 +673,7 @@ RSpec.describe "projection coverage" do
       XML
       aggregate_failures do
         expect(second_role_creator.editable_personal_creators).to eq([])
-        expect(without_qualifiers(second_role_creator.preserved_names))
+        expect(without_display_attributes(second_role_creator.preserved_names))
           .to eq([{ name: "Bell, Jen", roles: %w[Editor Creator], affiliation: [] }])
       end
     end
@@ -688,7 +691,7 @@ RSpec.describe "projection coverage" do
         </mods:name>
       XML
 
-      expect(without_qualifiers(doc.names)).to eq(
+      expect(without_display_attributes(doc.names)).to eq(
         [{ name: "Doe, Jane", roles: ["Creator"],
            affiliation: ["Department of Physics", "Northeastern University"] }]
       )
@@ -696,7 +699,7 @@ RSpec.describe "projection coverage" do
 
     it "gives a name with no affiliation an empty list, not a nil" do
       doc = doc_with("<mods:name><mods:namePart>Anon</mods:namePart></mods:name>")
-      expect(without_qualifiers(doc.names).first[:affiliation]).to eq([])
+      expect(without_display_attributes(doc.names).first[:affiliation]).to eq([])
     end
 
     it "carries the affiliation into the preserved (read-only) names too" do
@@ -707,7 +710,7 @@ RSpec.describe "projection coverage" do
         </mods:name>
       XML
 
-      expect(without_qualifiers(doc.preserved_names).first[:affiliation]).to eq(["Northeastern University"])
+      expect(without_display_attributes(doc.preserved_names).first[:affiliation]).to eq(["Northeastern University"])
     end
   end
 

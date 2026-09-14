@@ -66,6 +66,10 @@ doc.place_of_publication
                    #    place name. A bare code under any other authority
                    #    still projects
 
+# A name entry also carries @usage (fixed="primary" in the schema, so a record
+# that sets it has said which name leads) and :alternative_names, the MODS 3.7
+# alternativeName composed with the ENCLOSING name's @type.
+
 doc.origin_agents  # => [{ name:, roles:, affiliation:, display_label:, href:,
                    #      event_type: }, ...]
                    #    originInfo/agent, new in MODS 3.8: who performed the

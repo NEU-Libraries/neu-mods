@@ -1096,10 +1096,15 @@ module NEU
 
       # --- name display (faithful port of mods gem display_value_w_date) -------
 
+      # Every namePart is read through #part_text, so the separators this method
+      # composes are the only whitespace in the result. Read raw, an indented
+      # `<namePart>\n  Doe\n</namePart>` -- what a pretty-printer writes and what
+      # a curator pasting from a form leaves behind -- composed as "Doe ,  John",
+      # and the outer strip could not reach the spaces around the comma.
       def name_display_value_w_date(node)
         dv = name_display_value(node)
         node.xpath("mods:namePart[@type='date']", NAMESPACE).each do |np|
-          d = np.text
+          d = part_text(np)
           dv += ", #{d}" unless d.empty? || dv.end_with?(d)
         end
         dv = dv.sub(/\A, /, "")
@@ -1107,8 +1112,8 @@ module NEU
       end
 
       def name_display_value(node)
-        display_form = node.at_xpath("mods:displayForm", NAMESPACE)
-        return display_form.text if display_form && !display_form.text.empty?
+        display_form = part_text(node.at_xpath("mods:displayForm", NAMESPACE))
+        return display_form unless display_form.empty?
 
         if node["type"] == "personal"
           personal_display_value(node)
@@ -1135,9 +1140,10 @@ module NEU
       def append_terms_of_address(node, dv)
         first = true
         node.xpath("mods:namePart[@type='termsOfAddress']", NAMESPACE).each do |np|
-          next if np.text.empty?
+          term = part_text(np)
+          next if term.empty?
 
-          dv += first ? " #{np.text}" : ", #{np.text}"
+          dv += first ? " #{term}" : ", #{term}"
           first = false
         end
         dv
@@ -1147,13 +1153,23 @@ module NEU
       # NodeSet#text (no separator) -- e.g. two `given` parts become "A.(B)". We
       # reproduce that (quirk included) to stay behavior-preserving.
       def joined_parts(node, type)
-        node.xpath("mods:namePart[@type='#{type}']", NAMESPACE).map(&:text).join
+        node.xpath("mods:namePart[@type='#{type}']", NAMESPACE).map { |np| part_text(np) }.join
       end
 
       def non_date_parts_joined(node)
         node.xpath("mods:namePart", NAMESPACE)
-            .reject { |np| np["type"] == "date" || np.text.empty? }
-            .map(&:text).join(" ")
+            .reject { |np| np["type"] == "date" }
+            .map { |np| part_text(np) }
+            .reject(&:empty?)
+            .join(" ")
+      end
+
+      # One name element's text, whitespace-canonicalized, "" when absent. The
+      # name composition joins its parts with separators of its own, so a part
+      # has to arrive without the insignificant whitespace an XML document is
+      # free to carry around element content.
+      def part_text(node)
+        node ? NEU::MODS.canonical_ws(node.text) : ""
       end
 
       def name_roles(node)

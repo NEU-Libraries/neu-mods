@@ -212,4 +212,92 @@ RSpec.describe "2026-09-14 UAT projection changes" do
       )
     end
   end
+
+  describe "originInfo @eventType and the block's dates" do
+    it "carries the block's eventType onto every child of the block" do
+      doc = parse(<<~XML)
+        <mods:originInfo eventType="production">
+          <mods:publisher>The studio</mods:publisher>
+          <mods:place><mods:placeTerm type="text">Boston</mods:placeTerm></mods:place>
+          <mods:dateCreated>1935</mods:dateCreated>
+        </mods:originInfo>
+      XML
+      aggregate_failures do
+        expect(doc.publication_information.first[:event_type]).to eq("production")
+        expect(doc.place_of_publication.first[:event_type]).to eq("production")
+        expect(doc.date_created_event_type).to eq("production")
+      end
+    end
+
+    it "keeps two originInfo blocks' event types apart" do
+      doc = parse(<<~XML)
+        <mods:originInfo eventType="publication"><mods:publisher>Beacon</mods:publisher></mods:originInfo>
+        <mods:originInfo eventType="distribution"><mods:publisher>Ingram</mods:publisher></mods:originInfo>
+      XML
+      expect(doc.publication_information.map { |entry| entry[:event_type] })
+        .to eq(%w[publication distribution])
+    end
+
+    # A place is headed "Creation place" or "Publication place" by the date
+    # beside it, and the place element says nothing about the event itself.
+    it "names the date elements the place's own block carries" do
+      doc = parse(<<~XML)
+        <mods:originInfo>
+          <mods:place><mods:placeTerm type="text">Boston</mods:placeTerm></mods:place>
+          <mods:dateCreated>1935</mods:dateCreated>
+        </mods:originInfo>
+        <mods:originInfo>
+          <mods:place><mods:placeTerm type="text">New York</mods:placeTerm></mods:place>
+          <mods:dateIssued>1998</mods:dateIssued>
+        </mods:originInfo>
+      XML
+      expect(doc.place_of_publication.map { |entry| entry[:date_elements] })
+        .to eq([["dateCreated"], ["dateIssued"]])
+    end
+
+    it "gives a place in a dateless block no date elements" do
+      doc = parse(<<~XML)
+        <mods:originInfo><mods:place><mods:placeTerm type="text">Boston</mods:placeTerm></mods:place></mods:originInfo>
+      XML
+      expect(doc.place_of_publication.first[:date_elements]).to eq([])
+    end
+
+    it "reads the displayLabel a block puts over its date" do
+      doc = parse(<<~XML)
+        <mods:originInfo displayLabel="Photographed">
+          <mods:dateCreated encoding="w3cdtf">1935-06</mods:dateCreated>
+        </mods:originInfo>
+      XML
+      aggregate_failures do
+        expect(doc.date_created_display_label).to eq("Photographed")
+        expect(doc.date_created_precision).to eq("month")
+        expect(doc.date_issued_display_label).to be_nil
+      end
+    end
+  end
+
+  describe "originInfo/agent (MODS 3.8)" do
+    it "composes an agent the way it composes a top-level name" do
+      doc = parse(<<~XML)
+        <mods:originInfo eventType="production">
+          <mods:agent type="personal">
+            <mods:namePart type="family">Adams</mods:namePart>
+            <mods:namePart type="given">Ansel</mods:namePart>
+            <mods:role><mods:roleTerm type="text">Photographer</mods:roleTerm></mods:role>
+          </mods:agent>
+        </mods:originInfo>
+      XML
+      expect(doc.origin_agents).to eq(
+        [{ name: "Adams, Ansel", roles: ["Photographer"], affiliation: [],
+           display_label: nil, href: nil, event_type: "production" }]
+      )
+    end
+
+    it "drops an agent with no name text, as #names does" do
+      doc = parse(<<~XML)
+        <mods:originInfo><mods:agent><mods:role><mods:roleTerm>pbl</mods:roleTerm></mods:role></mods:agent></mods:originInfo>
+      XML
+      expect(doc.origin_agents).to eq([])
+    end
+  end
 end

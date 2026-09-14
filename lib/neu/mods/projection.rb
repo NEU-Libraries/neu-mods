@@ -330,8 +330,8 @@ module NEU
       # @displayLabel and @eventType sit on originInfo, not on the publisher,
       # place, edition, issuance or frequency inside it, so each of these takes
       # its header off the parent block.
-      def publication_information = labeled_texts_at("/mods:mods/mods:originInfo/mods:publisher", from: "..")
-      def edition = labeled_texts_at("/mods:mods/mods:originInfo/mods:edition", from: "..")
+      def publication_information = origin_texts_at("mods:publisher")
+      def edition = origin_texts_at("mods:edition")
 
       # Prefer the type="text" term per place, falling back to a coded one --
       # the pattern #role_term_value and #languages already use.
@@ -351,7 +351,22 @@ module NEU
       def place_of_publication
         doc.xpath("/mods:mods/mods:originInfo/mods:place", NAMESPACE).filter_map do |place|
           value = place_term_value(place)
-          labeled(value, place.parent) if value
+          next unless value
+
+          { value: value, **origin_qualifiers_of(place.parent),
+            date_elements: origin_date_elements(place.parent) }
+        end
+      end
+
+      # originInfo/agent, new in MODS 3.8: who performed the event the block
+      # records. Read through the same port as a top-level name, so a publisher
+      # recorded as an agent composes the way a creator does and carries its
+      # roles -- which is what a consumer heads the row with when the block
+      # states no displayLabel or eventType.
+      def origin_agents
+        doc.xpath("/mods:mods/mods:originInfo/mods:agent", NAMESPACE).filter_map do |node|
+          entry = name_entry(node)
+          entry.merge(event_type: attr_value(node.parent, "eventType")) if entry[:name]
         end
       end
 
@@ -365,13 +380,13 @@ module NEU
         clean(code&.text)
       end
 
-      def issuance = labeled_texts_at("/mods:mods/mods:originInfo/mods:issuance", from: "..")
+      def issuance = origin_texts_at("mods:issuance")
 
       # Serials. The @authority a record puts on a frequency is not projected:
       # authority handling is a question the gem defers everywhere else -- for
       # genre, subject and name -- and answering it for one field would be
       # inconsistent.
-      def frequency = labeled_texts_at("/mods:mods/mods:originInfo/mods:frequency", from: "..")
+      def frequency = origin_texts_at("mods:frequency")
 
       # Read with its line breaks intact. A legacy contents list separates its
       # entries by newline, and the whitespace collapse every other field wants
@@ -558,7 +573,8 @@ module NEU
       # What #date_parts returns when the element is absent entirely, so an
       # absent date is distinguishable from one present and unparseable.
       EMPTY_DATE = { value: nil, precision: nil, end_value: nil, end_precision: nil,
-                     qualifier: nil, key_date: nil, text: nil }.freeze
+                     qualifier: nil, key_date: nil, text: nil,
+                     display_label: nil, event_type: nil }.freeze
 
       # Everything a record declared about one originInfo date, as
       # { value:, precision:, end_value:, end_precision:, qualifier:, key_date:,
@@ -585,6 +601,11 @@ module NEU
       # else. dateValid is the period the content holds for, and dateOther is
       # where a date fitting no other element lands, which is where a quantity
       # of migrated v1 date data goes.
+      # The seven date elements MODS puts under originInfo, in the order a
+      # consumer deciding a place header reads them.
+      DATE_ELEMENTS = %w[dateIssued dateCreated copyrightDate dateCaptured
+                         dateValid dateOther dateModified].freeze
+
       def date_created_parts = date_parts("dateCreated")
       def date_issued_parts = date_parts("dateIssued")
       def copyright_date_parts = date_parts("copyrightDate")
@@ -600,6 +621,8 @@ module NEU
       def date_created_qualifier = date_created_parts[:qualifier]
       def date_created_key_date = date_created_parts[:key_date]
       def date_created_text = date_created_parts[:text]
+      def date_created_display_label = date_created_parts[:display_label]
+      def date_created_event_type = date_created_parts[:event_type]
 
       def date_issued = date_issued_parts[:value]
       def date_issued_precision = date_issued_parts[:precision]
@@ -608,6 +631,8 @@ module NEU
       def date_issued_qualifier = date_issued_parts[:qualifier]
       def date_issued_key_date = date_issued_parts[:key_date]
       def date_issued_text = date_issued_parts[:text]
+      def date_issued_display_label = date_issued_parts[:display_label]
+      def date_issued_event_type = date_issued_parts[:event_type]
 
       def copyright_date = copyright_date_parts[:value]
       def copyright_date_precision = copyright_date_parts[:precision]
@@ -616,6 +641,8 @@ module NEU
       def copyright_date_qualifier = copyright_date_parts[:qualifier]
       def copyright_date_key_date = copyright_date_parts[:key_date]
       def copyright_date_text = copyright_date_parts[:text]
+      def copyright_date_display_label = copyright_date_parts[:display_label]
+      def copyright_date_event_type = copyright_date_parts[:event_type]
 
       def date_captured = date_captured_parts[:value]
       def date_captured_precision = date_captured_parts[:precision]
@@ -624,6 +651,8 @@ module NEU
       def date_captured_qualifier = date_captured_parts[:qualifier]
       def date_captured_key_date = date_captured_parts[:key_date]
       def date_captured_text = date_captured_parts[:text]
+      def date_captured_display_label = date_captured_parts[:display_label]
+      def date_captured_event_type = date_captured_parts[:event_type]
 
       def date_valid = date_valid_parts[:value]
       def date_valid_precision = date_valid_parts[:precision]
@@ -632,6 +661,8 @@ module NEU
       def date_valid_qualifier = date_valid_parts[:qualifier]
       def date_valid_key_date = date_valid_parts[:key_date]
       def date_valid_text = date_valid_parts[:text]
+      def date_valid_display_label = date_valid_parts[:display_label]
+      def date_valid_event_type = date_valid_parts[:event_type]
 
       def date_other = date_other_parts[:value]
       def date_other_precision = date_other_parts[:precision]
@@ -640,6 +671,8 @@ module NEU
       def date_other_qualifier = date_other_parts[:qualifier]
       def date_other_key_date = date_other_parts[:key_date]
       def date_other_text = date_other_parts[:text]
+      def date_other_display_label = date_other_parts[:display_label]
+      def date_other_event_type = date_other_parts[:event_type]
 
       def date_modified = date_modified_parts[:value]
       def date_modified_precision = date_modified_parts[:precision]
@@ -648,6 +681,8 @@ module NEU
       def date_modified_qualifier = date_modified_parts[:qualifier]
       def date_modified_key_date = date_modified_parts[:key_date]
       def date_modified_text = date_modified_parts[:text]
+      def date_modified_display_label = date_modified_parts[:display_label]
+      def date_modified_event_type = date_modified_parts[:event_type]
 
       # The [value, precision] pair the precision work introduced. Retained
       # because it is the documented entry point for a caller that wants both
@@ -701,6 +736,7 @@ module NEU
         # origin
         publication_information: :many,
         place_of_publication: :many,
+        origin_agents: :many,
         edition: :many,
         issuance: :many,
         frequency: :many,
@@ -714,6 +750,8 @@ module NEU
         date_created_qualifier: :one,
         date_created_key_date: :one,
         date_created_text: :one,
+        date_created_display_label: :one,
+        date_created_event_type: :one,
         date_issued: :one,
         date_issued_precision: :one,
         date_issued_end: :one,
@@ -721,6 +759,8 @@ module NEU
         date_issued_qualifier: :one,
         date_issued_key_date: :one,
         date_issued_text: :one,
+        date_issued_display_label: :one,
+        date_issued_event_type: :one,
         copyright_date: :one,
         copyright_date_precision: :one,
         copyright_date_end: :one,
@@ -728,6 +768,8 @@ module NEU
         copyright_date_qualifier: :one,
         copyright_date_key_date: :one,
         copyright_date_text: :one,
+        copyright_date_display_label: :one,
+        copyright_date_event_type: :one,
         date_captured: :one,
         date_captured_precision: :one,
         date_captured_end: :one,
@@ -735,6 +777,8 @@ module NEU
         date_captured_qualifier: :one,
         date_captured_key_date: :one,
         date_captured_text: :one,
+        date_captured_display_label: :one,
+        date_captured_event_type: :one,
         date_valid: :one,
         date_valid_precision: :one,
         date_valid_end: :one,
@@ -742,6 +786,8 @@ module NEU
         date_valid_qualifier: :one,
         date_valid_key_date: :one,
         date_valid_text: :one,
+        date_valid_display_label: :one,
+        date_valid_event_type: :one,
         date_other: :one,
         date_other_precision: :one,
         date_other_end: :one,
@@ -749,6 +795,8 @@ module NEU
         date_other_qualifier: :one,
         date_other_key_date: :one,
         date_other_text: :one,
+        date_other_display_label: :one,
+        date_other_event_type: :one,
         date_modified: :one,
         date_modified_precision: :one,
         date_modified_end: :one,
@@ -756,6 +804,8 @@ module NEU
         date_modified_qualifier: :one,
         date_modified_key_date: :one,
         date_modified_text: :one,
+        date_modified_display_label: :one,
+        date_modified_event_type: :one,
 
         # physical description
         resource_type: :many,
@@ -911,6 +961,7 @@ module NEU
       def date_entry(start, finish, nodes)
         value, precision, text = node_date(start)
         end_value, end_precision = node_date(finish)
+        origin = (start || finish)&.parent
         {
           value: value,
           precision: precision,
@@ -918,7 +969,12 @@ module NEU
           end_precision: end_precision,
           qualifier: attr_value(start, "qualifier") || attr_value(finish, "qualifier"),
           key_date: nodes.any? { |n| attr_value(n, "keyDate") == "yes" },
-          text: text
+          text: text,
+          # Off the enclosing originInfo, because that is where MODS puts both.
+          # A date row is headed by its element ("Date created"), and these are
+          # the two things a record can say to override that.
+          display_label: attr_value(origin, "displayLabel"),
+          event_type: attr_value(origin, "eventType")
         }
       end
 
@@ -976,6 +1032,38 @@ module NEU
       # publisher, place, extent or digitalOrigin inside them.
       def labeled(value, label_node)
         { value: value, **qualifiers_of(label_node) }
+      end
+
+      # The qualifiers of an originInfo block. @eventType says what the block
+      # records -- a publication, a production, a distribution -- and the
+      # librarians asked that its value head the block when no displayLabel
+      # does. MODS puts it on originInfo alone, so it is not part of the
+      # general pair.
+      def origin_qualifiers_of(node)
+        qualifiers_of(node).merge(event_type: attr_value(node, "eventType"))
+      end
+
+      # An originInfo child, carrying the block's header attributes. `xpath` is
+      # relative to the originInfo, which is the element the qualifiers come
+      # from -- MODS puts neither attribute on the children.
+      def origin_texts_at(xpath)
+        doc.xpath("/mods:mods/mods:originInfo", NAMESPACE).flat_map do |origin|
+          origin.xpath(xpath, NAMESPACE).filter_map do |node|
+            value = clean(node.text)
+            { value: value, **origin_qualifiers_of(origin) } if value
+          end
+        end
+      end
+
+      # The date elements the enclosing originInfo carries. A place is headed
+      # "Creation place" or "Publication place" depending on which date sits
+      # beside it, and the place element itself says nothing about the event.
+      # Which dates are present is data; the header text is display policy and
+      # stays with the consumer.
+      def origin_date_elements(origin)
+        return [] unless origin
+
+        DATE_ELEMENTS.select { |name| origin.at_xpath("mods:#{name}", NAMESPACE) }
       end
 
       # #texts_at, with each value carrying the qualifiers of its element.

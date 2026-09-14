@@ -66,6 +66,17 @@ doc.place_of_publication
                    #    place name. A bare code under any other authority
                    #    still projects
 
+doc.origin_agents  # => [{ name:, roles:, affiliation:, display_label:, href:,
+                   #      event_type: }, ...]
+                   #    originInfo/agent, new in MODS 3.8: who performed the
+                   #    event the block records
+
+# An originInfo child also carries its block's @eventType, and a place carries
+# the NAMES of the date elements beside it (:date_elements) -- "Creation place"
+# and "Publication place" are the same element under a different date, and the
+# place says nothing about the event itself. Each of the seven dates gains
+# <date>_display_label and <date>_event_type from the same block.
+
 # Every DISPLAYED projection carries the @displayLabel and xlink:href of the
 # element its header comes from, as { value:, display_label:, href: } -- or as
 # two extra keys where the entry already had a shape of its own. MODS puts the

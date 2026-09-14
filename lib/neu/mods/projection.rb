@@ -157,7 +157,7 @@ module NEU
       # The editable free-text keyword set (Cerberus simple form): topics under the
       # attribute-free keyword subjects only.
       def keywords
-        keyword_subjects.flat_map { |s| s.xpath("mods:topic", NAMESPACE).map { |t| t.text.strip } }
+        keyword_subjects.flat_map { |s| texts_under(s, "mods:topic") }
       end
 
       # Neither child carries heading text: cartographics is a structured
@@ -1453,9 +1453,8 @@ module NEU
       # (NOT MARC-relator-translated -- see README). nil if neither is present.
       def role_term_value(role)
         %w[text code].each do |type|
-          term = role.at_xpath("mods:roleTerm[@type='#{type}']", NAMESPACE)
-          text = term&.text.to_s.strip
-          return text unless text.empty?
+          term = part_text(role.at_xpath("mods:roleTerm[@type='#{type}']", NAMESPACE))
+          return term unless term.empty?
         end
         nil
       end

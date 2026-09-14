@@ -415,4 +415,46 @@ RSpec.describe "2026-09-14 UAT projection changes" do
       end
     end
   end
+
+  describe "insignificant whitespace elsewhere" do
+    it "canonicalizes a roleTerm and a keyword topic" do
+      doc = parse(<<~XML)
+        <mods:name type="personal">
+          <mods:namePart>Jane Doe</mods:namePart>
+          <mods:role><mods:roleTerm type="text">  Photo   grapher  </mods:roleTerm></mods:role>
+        </mods:name>
+        <mods:subject><mods:topic>  Salt   marshes  </mods:topic></mods:subject>
+      XML
+      aggregate_failures do
+        expect(doc.names.first[:roles]).to eq(["Photo grapher"])
+        expect(doc.keywords).to eq(["Salt marshes"])
+      end
+    end
+  end
+
+  describe "an abstract of several paragraphs" do
+    # normalize_paragraphs keeps a blank-line break and collapses a lone
+    # newline to a space, so the structure a curator typed survives into the
+    # access copy and a display can wrap each paragraph.
+    it "keeps the paragraph breaks and drops the indentation around them" do
+      doc = parse(<<~XML)
+        <mods:abstract>
+          The first paragraph, which
+          wraps in the source.
+
+          The second paragraph.
+        </mods:abstract>
+      XML
+      expect(doc.abstract)
+        .to eq("The first paragraph, which wraps in the source.\n\nThe second paragraph.")
+    end
+
+    it "joins two abstract elements as two paragraphs" do
+      doc = parse(<<~XML)
+        <mods:abstract>One.</mods:abstract>
+        <mods:abstract>Two.</mods:abstract>
+      XML
+      expect(doc.abstract).to eq("One.\n\nTwo.")
+    end
+  end
 end

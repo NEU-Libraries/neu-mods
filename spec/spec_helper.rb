@@ -9,10 +9,10 @@ def fixture(name)
 end
 
 # The attributes a display reads off an element rather than out of its text:
-# the header (@displayLabel), the link (xlink:href), and on a name the two the
-# 2026-09-14 UAT round added. A spec about what an entry holds BESIDE them
-# reads better without those keys repeated on every line, so it drops them;
-# each has its own expectations in uat_display_spec.rb.
+# the header (@displayLabel), the link (xlink:href), and, on a name, @usage and
+# its alternative names. A spec about what an entry holds BESIDE them reads
+# better without those keys repeated on every line, so it drops them; each has
+# its own expectations in display_attributes_spec.rb.
 DISPLAY_ATTRIBUTES = %i[display_label href usage alternative_names].freeze
 
 def without_display_attributes(value)

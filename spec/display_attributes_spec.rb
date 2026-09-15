@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
-# The projection changes asked for by the librarians' 2026-09-14 UAT pass
-# (DRS_2.0_Metadata_and_Display_Notes). Kept in one file so a reviewer can read
-# the round as a round; the older coverage rounds stay where they are.
-RSpec.describe "2026-09-14 UAT projection changes" do
+# What a display reads off a MODS element rather than out of its text -- the
+# header, the link, a name's @usage -- and the reading fixes that go with it.
+# Held apart from projection_coverage_spec, which is about WHICH elements
+# project at all.
+RSpec.describe "the attributes and values a display reads" do
   def parse(body)
     NEU::MODS::Document.parse(<<~XML)
       <?xml version="1.0"?>

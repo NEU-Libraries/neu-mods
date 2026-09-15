@@ -7,9 +7,9 @@
 # the conformance/document specs pin its XML-driven behavior.
 RSpec.describe "NEU::MODS.compose_title" do
   # nonSort, title, subtitle, partName, partNumber, the order the librarians
-  # settled on 2026-09-14. The schema's unordered choice gives no document
-  # order to follow, so the composer fixes one. A period separates the title
-  # or subtitle from the parts, and one part from the next.
+  # chose. The schema's unordered choice gives no document order to follow, so
+  # the composer fixes one. A period separates the title or subtitle from the
+  # parts, and one part from the next.
   it "composes all parts in order: non_sort+title, : subtitle, . part_name, . part_number" do
     parts = {
       non_sort: "The ", title: "Hobbit", subtitle: "There and Back Again",

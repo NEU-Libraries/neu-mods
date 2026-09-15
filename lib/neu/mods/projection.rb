@@ -54,9 +54,8 @@ module NEU
       # Returns "" when there is no title. Exposed as NEU::MODS.compose_title.
       #
       # nonSort, title, subtitle, partName, partNumber -- the order the
-      # librarians settled on 2026-09-14. titleInfo is an unordered choice in
-      # the schema, so no document order is available to follow and the
-      # composer has to fix one.
+      # librarians chose. titleInfo is an unordered choice in the schema, so no
+      # document order is available to follow and the composer has to fix one.
       #
       # A period separates the title or subtitle from the parts, and one part
       # from the next. The separator travels with its part rather than with the

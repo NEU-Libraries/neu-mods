@@ -91,6 +91,21 @@ doc.origin_agents  # => [{ name:, roles:, affiliation:, display_label:, href:,
 # projects nil. The four fields that JOIN several elements into one string --
 # abstract and the three accessCondition fields -- take companion scalars
 # instead (doc.abstract_display_label, doc.abstract_href).
+
+# A BROWSABLE projection also carries the vocabulary its value was taken from,
+# as { authority:, authority_uri:, value_uri: } -- names (and originInfo
+# agents), languages, genres and subject headings. A consumer asking "may this
+# value be offered as a browse?" asks for any of the three: MODS lets a record
+# declare its vocabulary by URI alone, so requiring @authority would call an
+# authorityURI-bearing corporate name uncontrolled.
+#
+# This resolves DIFFERENTLY from the pair above, which is why it is a separate
+# port rather than three more keys on qualifiers_of. A header often comes from
+# a PARENT; an authority never does. It is read off the element holding the
+# value, then off an enclosing <subject> -- a pre-coordinated heading declares
+# its vocabulary once, on the heading. A <role>/<roleTerm> authority is never
+# consulted: it is the vocabulary of the RELATOR, and the deposit form writes a
+# marcrelator roleTerm on every creator it collects.
 doc.host_collections
                    # => [{ title:, volume:, issue:, start_page:, end_page:,
                    #      date:, text:, details: [...], extents: [...] }, ...]
@@ -111,6 +126,21 @@ doc.location       # => [{ physical_location:, shelf_location:, url:,
                    #      display_label:, href: }, ...]
 doc.map_data       # => [{ scale:, projection:, coordinates: }, ...]
 doc.title_subjects # => ["The Great Gatsby"]   composed like the main title
+doc.subject_headings
+                   # => [{ parts: ["Salt marshes", "Massachusetts"],
+                   #      heading: "Salt marshes -- Massachusetts",
+                   #      axis: "topic", authority: "lcsh", authority_uri:,
+                   #      value_uri:, display_label:, href: }, ...]
+                   #    one top-level <subject> as ONE heading. :heading is the
+                   #    parts joined, here rather than with the caller because
+                   #    it is both the string a display renders and the string
+                   #    a browse index holds -- two joins is how those drift.
+                   #    :axis names the element of the heading's MAIN term
+                   #    (its first child carrying heading text), which is what
+                   #    says which browse the heading belongs to: a place
+                   #    subdivision does not make a topic heading a place.
+                   #    A <name> axis splits by @type: "personal_name" or
+                   #    "corporate_name"
 doc.hierarchical_geographic_subjects
                    # => [{ country:, state:, city:, ... }, ...]   eleven levels,
                    #    structured for the reason map_data is

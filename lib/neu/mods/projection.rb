@@ -164,18 +164,49 @@ module NEU
       # MARC code rather than a place name.
       HEADING_OMITTED_CHILDREN = %w[cartographics geographicCode].freeze
 
+      # What a cataloguer puts between the steps of a pre-coordinated heading.
+      # Here rather than with the consumer because the composed heading is a
+      # projected value now: a display and an index that both read it cannot
+      # separate it differently. Spaces included, which is the separator DRS
+      # has displayed for years.
+      HEADING_SEPARATOR = " -- "
+
+      # A <subject><name> with no @type reaches the corporate axis. The display
+      # already composes such a name, because #subject_heading_part never
+      # consulted @type, so the alternative is a heading a reader sees and no
+      # browse holds. Corporate rather than personal: MODS expects
+      # @type="personal" on a person, and the untyped subject names DRS holds
+      # are institutional.
+      TYPELESS_NAME_SUBJECT_TYPE = "corporate"
+
       # Every top-level <subject> as ONE heading, its parts in document order.
       # A pre-coordinated heading like "Salt marshes--Massachusetts--20th
       # century" is a single statement, and the per-axis fields below cannot say
       # which parts belonged together: they pool every topic on the record into
       # one list, so a fragment of a heading and a whole heading read alike.
       #
-      # Kept in parts rather than joined. The separator is display policy, the
-      # same call #map_data makes for cartographics.
+      # The parts stay, because the Advanced edit form and a consumer wanting
+      # one step of a heading both ask for them. `heading:` is the same parts
+      # joined, and it is here rather than left to each caller because the
+      # composed heading is now BOTH the string a display renders and the
+      # string a browse index holds. Two callers joining independently is how
+      # a displayed value and an indexed value drift apart, and this join
+      # makes them the same string rather than two that happen to match.
+      #
+      # `axis:` names the MODS element the heading's MAIN term came from, which
+      # is the first child that carries heading text. A consumer cannot derive
+      # it from the parts -- they are bare strings -- and it is the fact that
+      # says which browse a heading belongs to: "Salt marshes -- Massachusetts"
+      # is a topic heading with a place subdivision, not a place. Reported as
+      # the element name, so the browse vocabulary stays with the consumer.
       def subject_headings
         doc.xpath("/mods:mods/mods:subject", NAMESPACE).filter_map do |node|
+          axis_node = heading_axis_node(node)
           parts = subject_heading_parts(node)
-          { parts: parts, **qualifiers_of(node) } unless parts.empty?
+          next if axis_node.nil? || parts.empty?
+
+          { parts: parts, heading: parts.join(HEADING_SEPARATOR), axis: heading_axis(axis_node),
+            **authority_of(axis_node), **qualifiers_of(node) }
         end
       end
 
@@ -246,6 +277,10 @@ module NEU
           # and without it a consumer grouping role-less names can only guess.
           usage: attr_value(node, "usage"),
           alternative_names: alternative_names(node),
+          # The vocabulary this name was taken from, read off the <name> alone.
+          # A marcrelator <roleTerm> inside it says what the person DID, not
+          # which list the name came from -- see #authority_of.
+          **authority_of(node),
           **qualifiers_of(node)
         }
       end
@@ -320,11 +355,15 @@ module NEU
       # recover it from the term.
       def languages
         doc.xpath("/mods:mods/mods:language", NAMESPACE).filter_map do |lang|
-          term = language_term(lang)
+          node = language_term_node(lang)
+          term = language_term_of(node)
           next unless term
 
+          # The authority comes off the <languageTerm> the term was read from,
+          # never off the <language> around it: MODS carries @authority on the
+          # term, and a code-only record declares `iso639-2b` there.
           { term: term, object_part: attr_value(lang, "objectPart"), script: script_term(lang),
-            **qualifiers_of(lang) }
+            **authority_of(node), **qualifiers_of(lang) }
         end
       end
 
@@ -341,7 +380,11 @@ module NEU
       def extent = labeled_texts_at("/mods:mods/mods:physicalDescription/mods:extent", from: "..")
       def digital_origin = labeled_texts_at("/mods:mods/mods:physicalDescription/mods:digitalOrigin", from: "..")
 
-      def genres = labeled_texts_at("/mods:mods/mods:genre")
+      # A genre is a browse axis, so its entry carries the vocabulary the term
+      # came from. The other labeled fields do not: nothing gates on their
+      # vocabulary, and three more keys on fifteen fields is JSON no consumer
+      # reads.
+      def genres = labeled_texts_at("/mods:mods/mods:genre", authority: true)
 
       # Who the resource is for. The last displayed top-level element with no
       # projection at all: a record naming its audience said so to nobody.
@@ -922,6 +965,11 @@ module NEU
       # display would otherwise never let a curator change.
       def main_title_display_label = attr_value(primary_title_info, "displayLabel")
 
+      # The three attributes MODS uses to declare where a value came from, and
+      # the projected key each reports under. Read by #authority_of below.
+      AUTHORITY_ATTRIBUTES = { authority: "authority", authority_uri: "authorityURI",
+                               value_uri: "valueURI" }.freeze
+
       private
 
       # --- helpers -------------------------------------------------------------
@@ -1072,6 +1120,48 @@ module NEU
         { display_label: attr_value(node, "displayLabel"), href: xlink_href(node) }
       end
 
+      # The attributes naming the vocabulary a VALUE was taken from, which is
+      # what tells a controlled term apart from one a depositor typed. A
+      # consumer gating a browse link on "is this term controlled?" asks for
+      # any of the three: MODS lets a record declare its vocabulary by URI
+      # alone, so requiring @authority would call an authorityURI-bearing name
+      # uncontrolled.
+      #
+      # NOT part of #qualifiers_of, and the difference is the resolution rule
+      # rather than taste. That pair answers "where does the HEADER come
+      # from", which is often a PARENT -- six projections pass `from:` for
+      # exactly that reason, because MODS puts @displayLabel on originInfo and
+      # physicalDescription rather than on the publisher or extent inside
+      # them. An authority is the opposite: `<form authority="marcform">`
+      # carries it on the element holding the text, so reading it off the
+      # label's element would find nothing there and attribute a parent's
+      # vocabulary to a child elsewhere.
+      #
+      # Each attribute resolves on the element, then on an enclosing
+      # <subject>: a pre-coordinated heading declares its vocabulary once, on
+      # the heading, and every part of it belongs to that vocabulary.
+      #
+      # A <role>/<roleTerm> authority is never consulted, which falls out of
+      # only ever reading the element and its <subject> ancestor. That matters
+      # because the deposit form writes a marcrelator roleTerm on every
+      # creator it collects, so an "any authority in the subtree" check would
+      # call every depositor-entered name controlled.
+      def authority_of(node)
+        heading = enclosing_subject(node)
+        AUTHORITY_ATTRIBUTES.transform_values do |attribute|
+          attr_value(node, attribute) || attr_value(heading, attribute)
+        end
+      end
+
+      # The <subject> a node sits inside, matched by namespace rather than by
+      # prefix for the reason #xlink_href is: a document binds the MODS
+      # namespace to whatever prefix it likes.
+      def enclosing_subject(node)
+        node&.ancestors&.find do |ancestor|
+          ancestor.name == "subject" && ancestor.namespace&.href == NAMESPACE["mods"]
+        end
+      end
+
       # xlink:href by namespace rather than by prefix. A document is free to
       # bind the XLink namespace to any prefix, or to none, and node["xlink:href"]
       # matches the literal prefix alone.
@@ -1086,8 +1176,9 @@ module NEU
       # header from. That is not always the element holding the text: MODS puts
       # @displayLabel on originInfo and physicalDescription, never on the
       # publisher, place, extent or digitalOrigin inside them.
-      def labeled(value, label_node)
-        { value: value, **qualifiers_of(label_node) }
+      def labeled(value, label_node, authority_node: nil)
+        entry = { value: value, **qualifiers_of(label_node) }
+        authority_node ? entry.merge(authority_of(authority_node)) : entry
       end
 
       # The qualifiers of an originInfo block. @eventType says what the block
@@ -1125,10 +1216,16 @@ module NEU
       # #texts_at, with each value carrying the qualifiers of its element.
       # `from:` is an XPath relative to the text-bearing node, naming the
       # ancestor the header comes from instead.
-      def labeled_texts_at(xpath, from: nil)
+      # `authority:` adds the vocabulary of the VALUE, which resolves off the
+      # text-bearing node even where `from:` points the header at an ancestor
+      # -- `<form authority="marcform">` is exactly that shape.
+      def labeled_texts_at(xpath, from: nil, authority: false)
         doc.xpath(xpath, NAMESPACE).filter_map do |node|
           value = clean(node.text)
-          labeled(value, from ? node.at_xpath(from, NAMESPACE) : node) if value
+          next unless value
+
+          labeled(value, from ? node.at_xpath(from, NAMESPACE) : node,
+                  authority_node: authority ? node : nil)
         end
       end
 
@@ -1184,9 +1281,31 @@ module NEU
         end
       end
 
+      # The corporate axis also takes a subject name with NO @type (see
+      # TYPELESS_NAME_SUBJECT_TYPE), so a name the heading composes reaches a
+      # browse instead of displaying and projecting nowhere.
       def name_subjects(type)
-        doc.xpath("/mods:mods/mods:subject/mods:name[@type='#{type}']", NAMESPACE)
+        predicate = "@type='#{type}'"
+        predicate = "#{predicate} or not(@type)" if type == TYPELESS_NAME_SUBJECT_TYPE
+        doc.xpath("/mods:mods/mods:subject/mods:name[#{predicate}]", NAMESPACE)
            .filter_map { |node| name_display_value_w_date(node) }
+      end
+
+      # The child a heading's axis and authority come from: the first one
+      # carrying heading text. A heading with none projects nothing, so its
+      # axis is never asked for.
+      def heading_axis_node(node)
+        node.xpath("mods:*", NAMESPACE).find { |child| subject_heading_part(child).compact.any? }
+      end
+
+      # The axis of one heading child, as the MODS element that holds it. A
+      # <name> splits by @type, because a person and an organisation are
+      # separate browses and MODS says which on the element rather than in the
+      # element name.
+      def heading_axis(child)
+        return "#{attr_value(child, "type") || TYPELESS_NAME_SUBJECT_TYPE}_name" if child.name == "name"
+
+        snake_case(child.name)
       end
 
       def subject_heading_parts(node)
@@ -1302,6 +1421,13 @@ module NEU
         [head, *rest.map(&:capitalize)].join
       end
 
+      # #camelize's inverse, for reporting a schema element name as a projected
+      # one: "hierarchicalGeographic" -> "hierarchical_geographic". Hand-rolled
+      # for the reason the gem has no Rails dependency at all.
+      def snake_case(name)
+        name.to_s.gsub(/([a-z])([A-Z])/) { "#{Regexp.last_match(1)}_#{Regexp.last_match(2).downcase}" }
+      end
+
       def texts_under(node, xpath)
         node.xpath(xpath, NAMESPACE).filter_map { |child| clean(child.text) }
       end
@@ -1310,13 +1436,24 @@ module NEU
         doc.xpath(xpath, NAMESPACE).filter_map { |node| clean(node.text) }
       end
 
-      # The language of one element: the text term, or a code read through the
-      # ISO 639 registry.
-      def language_term(lang)
-        text = lang.at_xpath("mods:languageTerm[@type='text']", NAMESPACE)
-        return clean(text.text) if text
+      # Which <languageTerm> the language of one element is read from, text
+      # form preferred. The node is located separately from its text because
+      # the authority governing the term sits on that element: the value and
+      # its vocabulary have to come from one node rather than from two
+      # independent lookups.
+      def language_term_node(lang)
+        lang.at_xpath("mods:languageTerm[@type='text']", NAMESPACE) ||
+          lang.at_xpath("mods:languageTerm", NAMESPACE)
+      end
 
-        code = clean(lang.at_xpath("mods:languageTerm", NAMESPACE)&.text)
+      # A text term as the record wrote it; a code through the ISO 639
+      # registry, so a record saying `eng` projects "English".
+      def language_term_of(node)
+        return nil unless node
+
+        return clean(node.text) if attr_value(node, "type") == "text"
+
+        code = clean(node.text)
         code && LanguageCodes.term(code)
       end
 

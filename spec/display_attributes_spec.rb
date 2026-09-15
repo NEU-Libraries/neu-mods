@@ -71,7 +71,8 @@ RSpec.describe "the attributes and values a display reads" do
         </mods:note>
       XML
       aggregate_failures do
-        expect(doc.genres).to eq([{ value: "photographs", display_label: "Photo type", href: nil }])
+        expect(doc.genres).to eq([{ value: "photographs", display_label: "Photo type", href: nil,
+                                    authority: nil, authority_uri: nil, value_uri: nil }])
         expect(doc.notes).to eq(
           [{ type: nil, value: "See the finding aid.", display_label: "Provenance",
              href: "https://example.org/finding-aid" }]
@@ -302,6 +303,7 @@ RSpec.describe "the attributes and values a display reads" do
       expect(doc.origin_agents).to eq(
         [{ name: "Adams, Ansel", roles: ["Photographer"], affiliation: [],
            usage: nil, alternative_names: [],
+           authority: nil, authority_uri: nil, value_uri: nil,
            display_label: nil, href: nil, event_type: "production" }]
       )
     end

@@ -260,19 +260,15 @@ RSpec.describe "projection coverage" do
           </mods:subject>
           <mods:subject authority="lcsh"><mods:topic>Coastal ecology</mods:topic></mods:subject>
         XML
-        expect(without_display_attributes(lcsh.subject_headings)).to eq([
-                                                                          { parts: ["Salt marshes", "Massachusetts",
-                                                                                    "20th century"] },
-                                                                          { parts: ["Coastal ecology"] }
-                                                                        ])
+        expect(parts_of(lcsh.subject_headings)).to eq([["Salt marshes", "Massachusetts", "20th century"],
+                                                       ["Coastal ecology"]])
       end
 
       it "reads a heading typed flat into one element as the same parts" do
         flat = doc_with(<<~XML)
           <mods:subject><mods:topic>Salt marshes--Massachusetts--20th century</mods:topic></mods:subject>
         XML
-        expect(without_display_attributes(flat.subject_headings)).to eq([{ parts: ["Salt marshes", "Massachusetts",
-                                                                                   "20th century"] }])
+        expect(parts_of(flat.subject_headings)).to eq([["Salt marshes", "Massachusetts", "20th century"]])
       end
 
       it "composes a name and a title part through their own display ports" do
@@ -288,11 +284,7 @@ RSpec.describe "projection coverage" do
             <mods:titleInfo><mods:nonSort>The</mods:nonSort><mods:title>Real Thing</mods:title></mods:titleInfo>
           </mods:subject>
         XML
-        expect(without_display_attributes(composed.subject_headings)).to eq([
-                                                                              { parts: ["Bell, Jen",
-                                                                                        "Correspondence"] },
-                                                                              { parts: ["The Real Thing"] }
-                                                                            ])
+        expect(parts_of(composed.subject_headings)).to eq([["Bell, Jen", "Correspondence"], ["The Real Thing"]])
       end
 
       it "makes each hierarchical level a step of the heading" do
@@ -305,8 +297,7 @@ RSpec.describe "projection coverage" do
             </mods:hierarchicalGeographic>
           </mods:subject>
         XML
-        expect(without_display_attributes(place.subject_headings)).to eq([{ parts: ["United States", "New York",
-                                                                                    "Parksville"] }])
+        expect(parts_of(place.subject_headings)).to eq([["United States", "New York", "Parksville"]])
       end
 
       it "omits the two children that carry no heading text" do
@@ -317,7 +308,7 @@ RSpec.describe "projection coverage" do
             <mods:cartographics><mods:coordinates>42.36,-71.06</mods:coordinates></mods:cartographics>
           </mods:subject>
         XML
-        expect(without_display_attributes(omitted.subject_headings)).to eq([{ parts: ["Boston"] }])
+        expect(parts_of(omitted.subject_headings)).to eq([["Boston"]])
       end
 
       it "drops a subject whose children are all blank or omitted" do
@@ -325,7 +316,7 @@ RSpec.describe "projection coverage" do
           <mods:subject><mods:topic></mods:topic></mods:subject>
           <mods:subject><mods:geographicCode>n-us-ma</mods:geographicCode></mods:subject>
         XML
-        expect(without_display_attributes(empty.subject_headings)).to eq([])
+        expect(parts_of(empty.subject_headings)).to eq([])
       end
 
       it "leaves the per-axis fields alone, since the facets read them" do

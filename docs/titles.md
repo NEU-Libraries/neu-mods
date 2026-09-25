@@ -31,8 +31,9 @@ Any `@type` marks a variant. MODS enumerates the type as exactly `abbreviated`,
 value as a variant also keeps a misspelled type out of the write path.
 
 **Two unmarked, untyped titles.** When a record carries two untyped `titleInfo`
-and marks neither, the first wins and the second reaches no field. That follows
-the schema. `@usage` exists to nominate the principal title, and `@type` is
+and marks neither, the first wins and the second reaches no field.
+
+That follows the schema. `@usage` exists to nominate the principal title, and `@type` is
 closed. MODS 3.5 gives a legitimate second untyped title an `@altRepGroup` (one
 title in two scripts) or an `@otherType`. An unmarked duplicate carries none of these,
 so MODS gives it no meaning to preserve. It stays in the preservation XML.

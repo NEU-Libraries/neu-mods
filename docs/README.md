@@ -21,6 +21,7 @@ back, so you can find either from the other. The pages mirror the mixins under
 | [`qualifiers-and-authority.md`](qualifiers-and-authority.md) | The display-label and href pair, the authority triple, and why they resolve differently |
 | [`titles.md`](titles.md) | Primary-title selection, the faithful and the access parts, `compose_title` and the nonSort binding |
 | [`names.md`](names.md) | The `display_value_w_date` port and its quirks, roles, and editable against preserved names |
+| [`subjects.md`](subjects.md) | Assembled headings, the axis lists, the separator, and the typeless-name rule |
 | [`fields.md`](fields.md) | The `FIELDS` registry, cardinality, the empty values, and adding a field |
 
 ## What belongs elsewhere

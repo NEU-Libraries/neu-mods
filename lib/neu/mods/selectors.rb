@@ -8,11 +8,9 @@ require_relative "projection/name_display"
 
 module NEU
   module MODS
-    # Node LOCATION over a parsed MODS document. These return live Nokogiri nodes,
-    # so they serve BOTH the read path (projection reads their text) AND the write
-    # path (Cerberus's MODSMerge mutates the returned nodes in place). That shared
-    # definition is the point: the node an editor changes is provably the node the
-    # projection reads. Mixed into Document; operates on `doc`.
+    # Node LOCATION, returning live nodes that serve both the read path and
+    # Cerberus's MODSMerge edits. A selector must never return a node the
+    # projection would not read from. See docs/editing.md.
     module Selectors
       include Projection::Support
       include Projection::NameDisplay
@@ -35,20 +33,12 @@ module NEU
         doc.xpath("/mods:mods/mods:abstract", NAMESPACE)
       end
 
-      # The "keyword" subjects the simple form manages: attribute-free <subject>
-      # elements whose element children are all <topic>. Anything with an
-      # authority/valueURI (or a non-topic child, e.g. a <name> subject) is curated
-      # and left untouched. (Distinct from the projection's #topical_subjects,
-      # which harvests *every* <topic> for the access copy.)
+      # The attribute-free, topic-only subjects the simple form manages.
       def keyword_subjects
         doc.xpath("/mods:mods/mods:subject", NAMESPACE).select { |s| keyword_subject?(s) }
       end
 
-      # The "editable creator" <name> nodes of a given @type ("personal" /
-      # "corporate") that the Advanced form manages: plain names (no authority
-      # markers) with a Creator role. The write-path counterpart to the
-      # editable_*_creators projections; everything else (authority-bearing or
-      # non-Creator) is curated and left untouched. Mirrors keyword_subjects.
+      # The plain Creator <name> nodes of one @type, for replace-on-save.
       def editable_creator_nodes(type)
         doc.xpath("/mods:mods/mods:name[@type='#{type}']", NAMESPACE)
            .select { |n| editable_creator_name?(n) }

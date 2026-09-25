@@ -6,16 +6,12 @@ require_relative "namespaces"
 
 module NEU
   module MODS
-    # Node CREATION for the write path, beside Selectors' node location.
-    # Cerberus's MODSMerge builds every title, abstract, subject and creator it
-    # adds through these, so their names and signatures are part of the
-    # contract. Mixed into Document; operates on `doc`.
+    # Node CREATION for the write path. Cerberus's MODSMerge builds every
+    # element it adds through these, so their names and signatures are part of
+    # the contract. See docs/editing.md.
     module Builders
-      # Build a namespaced MODS element reusing the document's existing MODS
-      # namespace declaration (so new nodes never re-declare xmlns). Matched by
-      # URI rather than prefix: a document binds MODS to whatever prefix it
-      # likes, and an element built outside the namespace is invisible to every
-      # XPath here. A document declaring no MODS namespace raises instead.
+      # A MODS element reusing the root's namespace declaration, matched by URI:
+      # built outside MODS, an element is invisible to every XPath here.
       def build_node(name, text = nil)
         node = Nokogiri::XML::Node.new(name, doc)
         node.namespace = mods_namespace_definition
@@ -23,10 +19,7 @@ module NEU
         node
       end
 
-      # Build a plain personal-creator <name> node: namePart[@type=given]/[family]
-      # + a text roleTerm. No authority/valueURI (the editable set). `role` is
-      # parameterised (default "Creator") so a later role-selectable form is a
-      # non-breaking change.
+      # A plain personal creator: given and family parts and a text roleTerm.
       def build_personal_name(given:, family:, role: "Creator")
         name = build_node("name")
         name["type"] = "personal"
@@ -36,8 +29,7 @@ module NEU
         name
       end
 
-      # Build a plain corporate-creator <name> node: a single namePart + a text
-      # roleTerm. No authority/valueURI.
+      # A plain corporate creator: one name part and a text roleTerm.
       def build_corporate_name(name:, role: "Creator")
         node = build_node("name")
         node["type"] = "corporate"

@@ -24,6 +24,7 @@ back, so you can find either from the other. The pages mirror the mixins under
 | [`subjects.md`](subjects.md) | Assembled headings, the axis lists, the separator, and the typeless-name rule |
 | [`dates.md`](dates.md) | The date model: every generated field, shapes, precision, ranges, keyDate, qualifiers and literals |
 | [`other-fields.md`](other-fields.md) | Origin info, physical description, access conditions, related items, identifiers and languages |
+| [`editing.md`](editing.md) | The write path: shared selectors, the builders, and what `MODSMerge` relies on |
 | [`fields.md`](fields.md) | The `FIELDS` registry, cardinality, the empty values, and adding a field |
 
 ## What belongs elsewhere

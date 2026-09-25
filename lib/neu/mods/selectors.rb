@@ -1,5 +1,11 @@
 # frozen_string_literal: true
 
+require "nokogiri"
+
+require_relative "namespaces"
+require_relative "canonicalize"
+require_relative "projection"
+
 module NEU
   module MODS
     # Node LOCATION over a parsed MODS document. These return live Nokogiri nodes,
@@ -38,7 +44,7 @@ module NEU
       # of any @type marks a variant, which also keeps an unrecognised or
       # misspelled value out of the write path rather than guessing at it.
       def variant_title?(node)
-        !NEU::MODS.canonical_ws(node["type"].to_s).empty?
+        !Canonicalize.canonical_ws(node["type"].to_s).empty?
       end
 
       # All top-level <abstract> elements (MODS permits several).

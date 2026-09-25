@@ -2,6 +2,11 @@
 
 require "date"
 
+require_relative "namespaces"
+require_relative "canonicalize"
+require_relative "text_normalizer"
+require_relative "language_codes"
+
 module NEU
   module MODS
     # Node -> plain data. The read contract: what a MODS document *projects to* for
@@ -148,7 +153,7 @@ module NEU
       # An open-string @type reduced to its letters and digits, so casing, word
       # separators and camelCasing cannot decide whether a field matches.
       def self.fold_type(str)
-        NEU::MODS.canonical_ws(str).downcase.gsub(/[^a-z0-9]/, "")
+        Canonicalize.canonical_ws(str).downcase.gsub(/[^a-z0-9]/, "")
       end
 
       # --- Subjects ------------------------------------------------------------
@@ -461,7 +466,7 @@ module NEU
       # structure, not stray formatting. A "--"-separated list is unaffected.
       def table_of_contents
         doc.xpath("/mods:mods/mods:tableOfContents", NAMESPACE).filter_map do |node|
-          lines = NEU::MODS.canonical_lines(node.text)
+          lines = Canonicalize.canonical_lines(node.text)
           labeled(lines, node) unless lines.empty?
         end
       end
@@ -935,7 +940,7 @@ module NEU
       # control cannot reach Solr or a display template. Titles and prose share
       # one vocabulary -- the asymmetry where only prose was cleaned was the bug.
       def access_title_parts
-        title_parts.transform_values { |value| NEU::MODS.normalize(value.to_s) }
+        title_parts.transform_values { |value| TextNormalizer.normalize(value.to_s) }
       end
 
       # Atlas names this field main_title; the registry requires a method per
@@ -1086,7 +1091,7 @@ module NEU
       def node_date(node)
         return [nil, nil, nil] unless node
 
-        str = NEU::MODS.canonical_ws(node.text)
+        str = Canonicalize.canonical_ws(node.text)
         return [nil, nil, nil] if str.empty?
 
         parsed = parse_declared_date(str, attr_value(node, "encoding"))
@@ -1098,7 +1103,7 @@ module NEU
       def attr_value(node, name)
         return nil unless node
 
-        value = NEU::MODS.canonical_ws(node[name].to_s)
+        value = Canonicalize.canonical_ws(node[name].to_s)
         value.empty? ? nil : value
       end
 
@@ -1268,7 +1273,7 @@ module NEU
       # One titleInfo composed the way the access copy wants it, shared by the
       # subject-title axis and the assembled heading so the two cannot drift.
       def composed_title_of(node)
-        parts = title_parts_of(node).transform_values { |value| NEU::MODS.normalize(value.to_s) }
+        parts = title_parts_of(node).transform_values { |value| TextNormalizer.normalize(value.to_s) }
         clean(Projection.compose_title(parts))
       end
 
@@ -1277,7 +1282,7 @@ module NEU
       # mark cannot reach Solr or a display template through this route either.
       def variant_titles(type)
         doc.xpath("/mods:mods/mods:titleInfo[@type='#{type}']", NAMESPACE).filter_map do |node|
-          parts = title_parts_of(node).transform_values { |value| NEU::MODS.normalize(value.to_s) }
+          parts = title_parts_of(node).transform_values { |value| TextNormalizer.normalize(value.to_s) }
           value = clean(Projection.compose_title(parts))
           labeled(value, node) if value
         end
@@ -1470,7 +1475,7 @@ module NEU
         node = parent.at_xpath(xpath, NAMESPACE)
         return nil unless node
 
-        v = NEU::MODS.canonical_ws(node.text)
+        v = Canonicalize.canonical_ws(node.text)
         v.empty? ? nil : v
       end
 
@@ -1478,14 +1483,14 @@ module NEU
       def clean(str)
         return nil if str.nil?
 
-        v = NEU::MODS.canonical_ws(str)
+        v = Canonicalize.canonical_ws(str)
         v.empty? ? nil : v
       end
 
       # canonical_ws keeping "" for blank -- for structured form-field values
       # (an empty given/family/org renders as an empty input, not a dropped key).
       def clean_part(str)
-        NEU::MODS.canonical_ws(str)
+        Canonicalize.canonical_ws(str)
       end
 
       # The schema leaves accessCondition/@type an open string, so match on a
@@ -1503,7 +1508,7 @@ module NEU
       end
 
       def join_paragraphs(nodes)
-        nodes.map { |n| NEU::MODS.normalize_paragraphs(n.text) }.reject(&:empty?).join("\n\n")
+        nodes.map { |n| TextNormalizer.normalize_paragraphs(n.text) }.reject(&:empty?).join("\n\n")
       end
 
       # --- name display (faithful port of mods gem display_value_w_date) -------
@@ -1577,7 +1582,7 @@ module NEU
       # has to arrive without the insignificant whitespace an XML document is
       # free to carry around element content.
       def part_text(node)
-        node ? NEU::MODS.canonical_ws(node.text) : ""
+        node ? Canonicalize.canonical_ws(node.text) : ""
       end
 
       def name_roles(node)

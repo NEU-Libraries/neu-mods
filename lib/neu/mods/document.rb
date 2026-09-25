@@ -2,6 +2,9 @@
 
 require "nokogiri"
 
+require_relative "selectors"
+require_relative "projection"
+
 module NEU
   module MODS
     # The gem's main entry point: a thin facade over a parsed MODS document.

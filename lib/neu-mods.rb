@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "neu/mods/version"
+require_relative "neu/mods/namespaces"
 require_relative "neu/mods/canonicalize"
 require_relative "neu/mods/text_normalizer"
 require_relative "neu/mods/language_codes"
@@ -23,14 +24,6 @@ require_relative "neu/mods/document"
 # submodules.
 module NEU
   module MODS
-    # The MODS v3 namespace, as a Nokogiri xpath namespace hash.
-    NAMESPACE = { "mods" => "http://www.loc.gov/mods/v3" }.freeze
-
-    # XLink, which MODS uses for the @xlink:href a display hyperlinks an element
-    # to. Held as a bare URI rather than a prefix map because the attribute is
-    # read by namespace: a document may bind XLink to any prefix it likes.
-    XLINK_NAMESPACE = "http://www.w3.org/1999/xlink"
-
     # The projected field set and its cardinality (see Projection::FIELDS),
     # surfaced here so a consumer deriving its own schema from it -- Atlas's
     # Metadata::MODS attr_json set -- reads the shared contract off the top-level

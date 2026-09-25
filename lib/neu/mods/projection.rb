@@ -654,24 +654,6 @@ module NEU
                      qualifier: nil, key_date: nil, text: nil,
                      display_label: nil, event_type: nil }.freeze
 
-      # Everything a record declared about one originInfo date, as
-      # { value:, precision:, end_value:, end_precision:, qualifier:, key_date:,
-      #   text: }.
-      #
-      # A date is not a scalar. Precision established that: a year-only date
-      # parses to January 1st, and no consumer downstream can tell that month
-      # and day from a record that claimed them. A range and a qualifier are the
-      # same kind of claim, and dropping them breaks the same rule -- a
-      # preservation repository must not project a value the record did not
-      # give. A ranged record was worse than that: #at_xpath took the first
-      # node, so one end of the range was PROMOTED to be the date, and the
-      # output was indistinguishable from a single certain year.
-      #
-      # The parts are projected as separate flat fields rather than one nested
-      # value, because the value half has three consumers that need a real date
-      # object -- a Solr sort key, a citation year and an OAI date. Those three
-      # are also why the literal gets its own field rather than sharing the
-      # value: a sort key cannot hold "ca. 1920", and a display can.
       # MODS puts seven date elements under originInfo and this reads all of
       # them. dateCaptured is when the object was digitised and dateModified is
       # when the resource changed -- preservation and cataloguing provenance,
@@ -679,6 +661,7 @@ module NEU
       # else. dateValid is the period the content holds for, and dateOther is
       # where a date fitting no other element lands, which is where a quantity
       # of migrated v1 date data goes.
+      #
       # The seven date elements MODS puts under originInfo, in the order a
       # consumer deciding a place header reads them.
       DATE_ELEMENTS = %w[dateIssued dateCreated copyrightDate dateCaptured
@@ -1013,6 +996,25 @@ module NEU
         match[2] ? "month" : "year"
       end
 
+      # Everything a record declared about one originInfo date, as
+      # { value:, precision:, end_value:, end_precision:, qualifier:, key_date:,
+      #   text: }.
+      #
+      # A date is not a scalar. Precision established that: a year-only date
+      # parses to January 1st, and no consumer downstream can tell that month
+      # and day from a record that claimed them. A range and a qualifier are the
+      # same kind of claim, and dropping them breaks the same rule -- a
+      # preservation repository must not project a value the record did not
+      # give. A ranged record was worse than that: #at_xpath took the first
+      # node, so one end of the range was PROMOTED to be the date, and the
+      # output was indistinguishable from a single certain year.
+      #
+      # The parts are projected as separate flat fields rather than one nested
+      # value, because the value half has three consumers that need a real date
+      # object -- a Solr sort key, a citation year and an OAI date. Those three
+      # are also why the literal gets its own field rather than sharing the
+      # value: a sort key cannot hold "ca. 1920", and a display can.
+      #
       # One originInfo date element, read by its attributes rather than by
       # position. A record is free to write point="end" first, and taking the
       # first node would then invert the range.
@@ -1263,9 +1265,6 @@ module NEU
         }
       end
 
-      # A variant title composed the way the access copy wants it: normalised
-      # first, like #access_title_parts, so a curly quote or an invisible format
-      # mark cannot reach Solr or a display template through this route either.
       # One titleInfo composed the way the access copy wants it, shared by the
       # subject-title axis and the assembled heading so the two cannot drift.
       def composed_title_of(node)
@@ -1273,6 +1272,9 @@ module NEU
         clean(Projection.compose_title(parts))
       end
 
+      # A variant title composed the way the access copy wants it: normalised
+      # first, like #access_title_parts, so a curly quote or an invisible format
+      # mark cannot reach Solr or a display template through this route either.
       def variant_titles(type)
         doc.xpath("/mods:mods/mods:titleInfo[@type='#{type}']", NAMESPACE).filter_map do |node|
           parts = title_parts_of(node).transform_values { |value| NEU::MODS.normalize(value.to_s) }
@@ -1402,18 +1404,6 @@ module NEU
         end
       end
 
-      def text_at(xpath)
-        node = doc.at_xpath(xpath, NAMESPACE)
-        node ? NEU::MODS.canonical_ws(node.text) : ""
-      end
-
-      # The :many counterpart of #text_at, and the one way this file builds a
-      # string array. Blank members drop out rather than arriving as nil: a
-      # record template that seeds an empty <topic> for an edit form to fill --
-      # which is exactly what Atlas's MODSBuilder writes -- otherwise projects
-      # [nil], and every consumer of that array has to guard for it.
-      # #texts_at scoped to a node rather than the document, for a repeatable
-      # child of one element.
       # :city_section -> "citySection". The level names are snake_case in the
       # projection and camelCase in the schema.
       def camelize(level)
@@ -1428,10 +1418,17 @@ module NEU
         name.to_s.gsub(/([a-z])([A-Z])/) { "#{Regexp.last_match(1)}_#{Regexp.last_match(2).downcase}" }
       end
 
+      # #texts_at scoped to a node rather than the document, for a repeatable
+      # child of one element.
       def texts_under(node, xpath)
         node.xpath(xpath, NAMESPACE).filter_map { |child| clean(child.text) }
       end
 
+      # The one way this file builds a string array. Blank members drop out
+      # rather than arriving as nil: a record template that seeds an empty
+      # <topic> for an edit form to fill -- which is exactly what Atlas's
+      # MODSBuilder writes -- otherwise projects [nil], and every consumer of
+      # that array has to guard for it.
       def texts_at(xpath)
         doc.xpath(xpath, NAMESPACE).filter_map { |node| clean(node.text) }
       end

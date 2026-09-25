@@ -53,6 +53,7 @@ Style/FormatStringToken:
 Naming/MethodParameterName:
   AllowedNames: [dv, np]
 
-# to_h is a flat 15-key projection hash (data, not logic).
+# A few methods (date_entry, host_part, host_details, host_extents) each build
+# one literal hash, one key per line: data, not logic.
 Metrics/MethodLength:
   Max: 20

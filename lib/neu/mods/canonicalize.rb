@@ -23,8 +23,7 @@ module NEU
       # the break separates one entry from the next. Blank lines drop, so a
       # double-spaced list does not project empty entries.
       def canonical_lines(str)
-        str.to_s.tr(NBSP, " ").split("\n").map { |line| line.gsub(/\s+/, " ").strip }
-           .reject(&:empty?).join("\n")
+        str.to_s.split("\n").map { |line| canonical_ws(line) }.reject(&:empty?).join("\n")
       end
 
       # Treat values differing only by insignificant whitespace (NBSP vs space,
@@ -155,8 +154,7 @@ module NEU
         s = base_normalize(str.to_s)
         s = s.gsub(HORIZONTAL_WS_RE, " ")
         s = s.gsub(/ *\n */, "\n")
-        s.split(PARAGRAPH_RUN_RE).map { |p| p.tr("\n", " ").strip }
-                                 .reject(&:empty?).join("\n\n")
+        s.split(PARAGRAPH_RUN_RE).map { |p| p.tr("\n", " ").strip }.reject(&:empty?).join("\n\n")
       end
 
       def base_normalize(str)

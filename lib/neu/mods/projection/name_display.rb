@@ -6,18 +6,16 @@ require_relative "support"
 module NEU
   module MODS
     module Projection
-      # Faithful port of the mods gem's display_value_w_date, plus the role
-      # readers that decide whether the edit form owns a name.
+      # Faithful port of the mods gem's display_value_w_date, quirks included,
+      # plus the role readers that decide whether the edit form owns a name.
+      # See docs/names.md.
       module NameDisplay
         include Support
 
         private
 
-        # Every namePart is read through #part_text, so the separators this method
-        # composes are the only whitespace in the result. Read raw, an indented
-        # `<namePart>\n  Doe\n</namePart>` -- what a pretty-printer writes and what
-        # a curator pasting from a form leaves behind -- composed as "Doe ,  John",
-        # and the outer strip could not reach the spaces around the comma.
+        # Read every namePart through #part_text, so the separators composed here
+        # are the only whitespace in the result.
         def name_display_value_w_date(node, type = attr_value(node, "type"))
           dv = name_display_value(node, type)
           node.xpath("mods:namePart[@type='date']", NAMESPACE).each do |np|
@@ -62,9 +60,8 @@ module NEU
           dv
         end
 
-        # NodeSet-style concatenation: the `mods` gem joins same-typed nameParts via
-        # NodeSet#text (no separator) -- e.g. two `given` parts become "A.(B)". We
-        # reproduce that (quirk included) to stay behavior-preserving.
+        # No separator, as the mods gem's NodeSet#text had: two `given` parts
+        # become "A.(B)". The conformance spec pins this quirk.
         def joined_parts(node, type)
           node.xpath("mods:namePart[@type='#{type}']", NAMESPACE).map { |np| part_text(np) }.join
         end
@@ -77,10 +74,7 @@ module NEU
               .join(" ")
         end
 
-        # One name element's text, whitespace-canonicalized, "" when absent. The
-        # name composition joins its parts with separators of its own, so a part
-        # has to arrive without the insignificant whitespace an XML document is
-        # free to carry around element content.
+        # One name element's text, whitespace-canonicalized, "" when absent.
         def part_text(node)
           clean_part(node&.text)
         end
@@ -89,14 +83,12 @@ module NEU
           node.xpath("mods:role", NAMESPACE).filter_map { |role| role_term_value(role) }
         end
 
-        # The first declared role, which is what decides whether the simple edit
-        # form owns a name. Deliberately not #name_roles.include?("Creator"):
-        # widening it would hand the form a name whose other roles it cannot
-        # represent, and saving would drop them from the preservation XML.
+        # The first declared role. Do not widen this to "any role is Creator":
+        # the form would then own a name whose other roles it cannot represent,
+        # and saving would drop them from the preservation XML.
         def name_role(node) = name_roles(node).first
 
-        # Prefer the type="text" roleTerm; fall back to the raw type="code" term
-        # (NOT MARC-relator-translated -- see README). nil if neither is present.
+        # The text roleTerm, else the raw code, untranslated. nil if neither.
         def role_term_value(role)
           %w[text code].each do |type|
             term = part_text(role.at_xpath("mods:roleTerm[@type='#{type}']", NAMESPACE))
@@ -105,12 +97,9 @@ module NEU
           nil
         end
 
-        # A name is "editable" (depositor-managed) when it carries no authority
-        # markers and resolves to a Creator role. Shared by editable_creator_nodes
-        # (write/select) and the editable_*_creators projections (read). The
-        # markers are read the way #authority_of reads them, so a blank attribute
-        # counts as absent in both and a name the projection calls uncontrolled
-        # is one the form can edit.
+        # No authority attribute and a Creator role. Shared by the write path's
+        # node selection and the read path's pre-fill, and reads the attributes
+        # the way #authority_of does, so the two never disagree.
         def editable_creator_name?(node)
           AUTHORITY_ATTRIBUTES.values.none? { |attr| attr_value(node, attr) } &&
             name_role(node) == "Creator"

@@ -32,9 +32,9 @@ value as a variant also keeps a misspelled type out of the write path.
 
 **Two unmarked, untyped titles.** When a record carries two untyped `titleInfo`
 and marks neither, the first wins and the second reaches no field. That follows
-the schema. `@usage` exists to nominate the principal title, `@type` is closed,
-and MODS 3.5 gives a legitimate second untyped title an `@altRepGroup` (one title
-in two scripts) or an `@otherType`. An unmarked duplicate carries none of these,
+the schema. `@usage` exists to nominate the principal title, and `@type` is
+closed. MODS 3.5 gives a legitimate second untyped title an `@altRepGroup` (one
+title in two scripts) or an `@otherType`. An unmarked duplicate carries none of these,
 so MODS gives it no meaning to preserve. It stays in the preservation XML.
 
 ## Faithful parts and access parts
@@ -48,8 +48,8 @@ so MODS gives it no meaning to preserve. It stays in the preservation XML.
 `MODSMerge` writes back what the form posts. Normalising here would rewrite the
 curator's characters in the preservation XML on the next save.
 
-`access_title_parts` normalises every part like the abstract, so a curly quote,
-an invisible format mark or a Windows-1252 control cannot reach Solr or a
+`access_title_parts` normalises every part like the abstract. A curly quote, an
+invisible format mark or a Windows-1252 control then cannot reach Solr or a
 display template. Titles and prose share one vocabulary. The variant titles, the
 subject titles and the titles inside a subject heading all go through
 `composed_title_of`, which normalises the same way.

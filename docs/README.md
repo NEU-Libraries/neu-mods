@@ -5,9 +5,9 @@ Per-component reference that has to version with the code.
 ## What belongs here
 
 Explanation a developer needs *while changing a specific file*, and that is too
-long to sit inside it. For neu-mods that means how each MODS area projects, why
-a projection rejected the obvious reading of the schema, and what the write path
-promises Cerberus.
+long to sit inside it. For neu-mods that means how each MODS area projects, and
+why a projection rejected the obvious reading of the schema. It also means what
+the write path promises Cerberus.
 
 Each page names the source files it covers. Those files carry a one-line pointer
 back, so you can find either from the other. The pages mirror the mixins under
@@ -20,6 +20,7 @@ back, so you can find either from the other. The pages mirror the mixins under
 |---|---|
 | [`qualifiers-and-authority.md`](qualifiers-and-authority.md) | The display-label and href pair, the authority triple, and why they resolve differently |
 | [`titles.md`](titles.md) | Primary-title selection, the faithful and the access parts, `compose_title` and the nonSort binding |
+| [`names.md`](names.md) | The `display_value_w_date` port and its quirks, roles, and editable against preserved names |
 | [`fields.md`](fields.md) | The `FIELDS` registry, cardinality, the empty values, and adding a field |
 
 ## What belongs elsewhere

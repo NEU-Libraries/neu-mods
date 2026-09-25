@@ -8,6 +8,38 @@ unannounced is one they discover as a nil value or a missing display row.
 Releases before 0.14.0 are not recorded. Their diffs are in git; this file
 starts where the convention does.
 
+## 0.14.1
+
+No projected shape changes. Two fixes change what the write path does, and the
+code is reorganised with the public method list unchanged.
+
+### Fixed
+
+- **The builders find the MODS namespace by URI.** `build_node` looked for the
+  literal prefix `mods`. Under any other prefix, such as `<m:mods xmlns:m=...>`,
+  it built elements in no namespace. The projection could not see them, and
+  `editable_creator_nodes` could not replace them, so each save added another
+  copy. A document whose root declares no MODS namespace now raises
+  `ArgumentError`.
+- **A blank authority attribute counts as absent on the edit path.** A name
+  with `authority=" "` was reported uncontrolled by `authority_of` but kept out
+  of the editable creators. It is now editable, matching the projection.
+
+### Changed
+
+- `Projection` is one mixin per MODS area under `lib/neu/mods/projection/`.
+  `Document`'s public and private methods and `to_h` are unchanged.
+  `Projection.compose_title`, `Projection.fold_type` and
+  `Projection::HEADING_SEPARATOR` still resolve.
+- The node builders move from `Selectors` to a `Builders` mixin. `Document`
+  includes both, so a call through a `Document` is unchanged.
+- Each file requires what it uses, so `require "neu/mods/document"` works
+  without the top-level entry file.
+- The date accessors and their `FIELDS` rows are generated from
+  `Projection::Dates::DATE_FIELDS` and `DATE_KEYS`. The field names are
+  unchanged.
+- The per-area explanation moves from source comments to `docs/`.
+
 ## 0.14.0
 
 The projection gains the facts a consumer needs to offer a metadata value as a

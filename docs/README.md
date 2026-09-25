@@ -19,6 +19,7 @@ back, so you can find either from the other. The pages mirror the mixins under
 | Page | Covers |
 |---|---|
 | [`qualifiers-and-authority.md`](qualifiers-and-authority.md) | The display-label and href pair, the authority triple, and why they resolve differently |
+| [`titles.md`](titles.md) | Primary-title selection, the faithful and the access parts, `compose_title` and the nonSort binding |
 | [`fields.md`](fields.md) | The `FIELDS` registry, cardinality, the empty values, and adding a field |
 
 ## What belongs elsewhere

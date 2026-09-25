@@ -17,35 +17,15 @@ module NEU
       include Projection::Support
       include Projection::NameDisplay
 
-      # Top-level primary titleInfo, falling back to the first top-level titleInfo
-      # that is NOT a variant. Scoped to direct children of <mods:mods> so a
-      # relatedItem's nested titleInfo (e.g. a series title) is never matched.
-      #
-      # MODS does not require usage="primary", so the fallback fires often, and
-      # an unfiltered one let document order decide the record's title. It also
-      # decided which node an edit form wrote to: MODSMerge overwrites the node
-      # this returns, so an alternative title reached here was destroyed on the
-      # next title edit, leaving the record with no primary title at all. nil is
-      # the right answer instead -- MODSMerge creates a proper primary titleInfo
-      # from nil, and each variant is projected under its own field.
-      #
-      # Where a record carries two UNTYPED titleInfo and marks neither, .first
-      # decides and the second reaches no field. That is the schema's answer
-      # rather than a shortfall: @usage is fixed="primary" and exists precisely
-      # to nominate the principal title, @type is a closed enumeration of the
-      # four variants, and MODS 3.5 gives a legitimate second untyped title an
-      # @altRepGroup (one title in two scripts) or an @otherType. An unmarked
-      # duplicate carries none of those, so MODS gives it no meaning to
-      # preserve, and it stays in the preservation XML with no projected field.
+      # Top-level primary titleInfo, falling back to the first top-level one that
+      # is not a variant; nil if every titleInfo is a variant. Never fall back to
+      # a variant: MODSMerge overwrites the node this returns. See docs/titles.md.
       def primary_title_info
         doc.at_xpath("/mods:mods/mods:titleInfo[@usage='primary']", NAMESPACE) ||
           doc.xpath("/mods:mods/mods:titleInfo", NAMESPACE).reject { |ti| variant_title?(ti) }.first
       end
 
-      # MODS enumerates titleInfo/@type as exactly abbreviated, translated,
-      # alternative and uniform -- every one of them a variant. So the presence
-      # of any @type marks a variant, which also keeps an unrecognised or
-      # misspelled value out of the write path rather than guessing at it.
+      # Any @type marks a variant: MODS enumerates four types, all variants.
       def variant_title?(node)
         !attr_value(node, "type").nil?
       end

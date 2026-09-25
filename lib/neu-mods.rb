@@ -6,6 +6,7 @@ require_relative "neu/mods/canonicalize"
 require_relative "neu/mods/text_normalizer"
 require_relative "neu/mods/language_codes"
 require_relative "neu/mods/selectors"
+require_relative "neu/mods/builders"
 require_relative "neu/mods/projection"
 require_relative "neu/mods/document"
 

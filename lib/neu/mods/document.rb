@@ -3,6 +3,7 @@
 require "nokogiri"
 
 require_relative "selectors"
+require_relative "builders"
 require_relative "projection"
 
 module NEU
@@ -19,6 +20,7 @@ module NEU
     # avoid spurious whitespace-only text nodes.
     class Document
       include Selectors
+      include Builders
       include Projection
 
       attr_reader :doc

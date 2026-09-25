@@ -58,7 +58,7 @@ Both run the same pipeline, in this order:
   on either side together. As a newline, `normalize_paragraphs` reads it as the
   soft wrap it was, and `normalize` turns it into a space.
 - **The soft hyphen is dropped, not made a hyphen.** It marks where a word may
-  break and renders as nothing. Solr discards it, so "co­operation" already
+  break and renders as nothing. Solr discards it, so `co<U+00AD>operation` already
   matches "cooperation". A real hyphen would index "co" and "operation" as two
   tokens.
 - **Carriage return is dropped**, which reduces a CRLF line ending to the one

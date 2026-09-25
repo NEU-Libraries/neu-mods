@@ -7,17 +7,17 @@ require "rbconfig"
 # without the top-level entry file. Run in a fresh process, because this one
 # already loaded everything through spec_helper.
 RSpec.describe "loading one file on its own" do
-  lib = File.expand_path("../lib", __dir__)
+  def lib_dir = File.expand_path("../lib", __dir__)
 
-  def run_ruby(lib, script)
-    Open3.capture2e(RbConfig.ruby, "-I", lib, "-e", script)
+  def run_ruby(script)
+    Open3.capture2e(RbConfig.ruby, "-I", lib_dir, "-e", script)
   end
 
-  Dir[File.join(lib, "neu/mods/**/*.rb")].each do |path|
-    feature = path.delete_prefix("#{lib}/").delete_suffix(".rb")
-
+  lib = File.expand_path("../lib", __dir__)
+  Dir[File.join(lib, "neu/mods/**/*.rb")].map { |path| path.delete_prefix("#{lib}/").delete_suffix(".rb") }
+                                         .each do |feature|
     it "loads #{feature}" do
-      output, status = run_ruby(lib, "require #{feature.inspect}")
+      output, status = run_ruby("require #{feature.inspect}")
       expect(status).to be_success, output
     end
   end
@@ -29,7 +29,7 @@ RSpec.describe "loading one file on its own" do
       doc.to_h
       doc.doc.root.add_child(doc.build_corporate_name(name: "Acme"))
     RUBY
-    output, status = run_ruby(lib, script)
+    output, status = run_ruby(script)
     expect(status).to be_success, output
   end
 
@@ -46,7 +46,7 @@ RSpec.describe "loading one file on its own" do
       XML
       exit(holder.new(Nokogiri::XML(xml)).editable_creator_nodes("corporate").size == 1)
     RUBY
-    output, status = run_ruby(lib, script)
+    output, status = run_ruby(script)
     expect(status).to be_success, output
   end
 end

@@ -22,7 +22,7 @@ module NEU
             d = part_text(np)
             dv += ", #{d}" unless d.empty? || dv.end_with?(d)
           end
-          dv = dv.sub(/\A, /, "")
+          dv = dv.delete_prefix(", ")
           dv.strip.empty? ? nil : dv.strip
         end
 

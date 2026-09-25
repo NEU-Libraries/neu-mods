@@ -1,23 +1,27 @@
 # neu-mods
 
-Northeastern-flavored MODS v3 **projection + selection** for the DRS, shared by
+The MODS v3 reading contract for Northeastern's DRS, shared by
 [Cerberus](https://github.com/NEU-Libraries/cerberus) (front end) and
 [Atlas](https://github.com/NEU-Libraries/atlas) (API backend).
 
-It is a **Nokogiri-native, dependency-light contract over MODS documents** — pure
-functions over a parsed document, nothing else. No Rails, no persistence, no
-HTTP. It answers two questions:
+It is pure functions over a parsed MODS document, with no Rails, no persistence
+and no HTTP. It depends on Nokogiri alone, not on the `sul-dlss/mods` and
+`nom-xml` stack. It answers two questions:
 
-- **"Where is X?"** — `Selectors` return *live Nokogiri nodes*, so they serve both
-  the read path (projection reads their text) and the write path (an editor
-  mutates the returned node in place). The node an editor changes is provably the
-  node the projection reads.
-- **"What does this project to?"** — `Projection` returns *plain data*
-  (hashes/strings/arrays — never opaque typed objects) for indexing/display.
+- **"Where is X?"** `Selectors` return live Nokogiri nodes. They serve the read
+  path and the write path, so the node an editor changes is the node the
+  projection reads.
+- **"What does this project to?"** `Projection` returns plain data: hashes,
+  strings and arrays, for indexing and display.
 
-It depends on **Nokogiri alone** — deliberately *not* the `sul-dlss/mods` +
-`nom-xml` stack (which is sunsetting alongside Stanford's move to Cocina). See
-the design note in the DRS gap-reports for the full rationale.
+## Installation
+
+```ruby
+# Gemfile
+gem "neu-mods"
+```
+
+The gem needs Ruby 3.0 or later.
 
 ## Usage
 
@@ -26,231 +30,66 @@ require "neu-mods"
 
 doc = NEU::MODS::Document.parse(xml_string)
 
-# Projection (plain data)
+# Projection: plain data
+doc.to_h           # => every field in NEU::MODS::FIELDS
 doc.plain_title    # => "What's New. How We Respond to Disaster. Episode 1"
 doc.title_parts    # => { non_sort:, subtitle:, title:, part_name:, part_number: }
-                   #    byte-faithful -- the edit forms pre-fill from these
-doc.abstract       # => normalized, paragraph-joined String
-doc.languages      # => [{ term: "English", object_part: nil, script: nil }, ...]
-                   #    a code-only <languageTerm>eng</> is read through the
-                   #    ISO 639 registry. @objectPart rides along because
-                   #    objectPart="subtitles" says the SUBTITLES are Spanish,
-                   #    not the resource
-doc.topical_subjects # => ["Civil society", ...]   (every <topic>, for the access copy)
-doc.keywords       # => [...]   (only the editable attribute-free keyword subjects)
-doc.date_created_parts
-                   # => { value:, precision:, end_value:, end_precision:,
-                   #      qualifier:, key_date:, text: }   everything the record
-                   #    declared about one date. w3cdtf YYYY, YYYY-MM and
-                   #    YYYY-MM-DD all parse, and the precision says which
-                   #    shape it gave, so display cannot invent a month or a
-                   #    day. The points are read by @point, not by document
-                   #    order, and the end carries its OWN precision.
-                   #    A keyDate="yes" node chooses the value, ahead of
-                   #    @point and document order; one date per type is the
-                   #    rule, so an unflagged repeat is discarded.
-                   #    A value that is not a w3cdtf date projects NO date
-                   #    and keeps its literal in :text -- "19uu", "ca. 1920"
-                   #    and "undated" are statements a cataloguer made, and
-                   #    guessing a date for them is worse than either losing
-                   #    them or showing them as written.
-                   #    Same for the other six originInfo dates --
-                   #    date_issued, copyright_date, date_captured,
-                   #    date_valid, date_other and date_modified. Each part is
-                   #    also a reader of its own, e.g.
-                   #    doc.date_created_qualifier.
-doc.place_of_publication
-                   # => [{ value: "Boston", display_label:, href: }, ...]
-                   #    the type="text" placeTerm wins, and a bare marccountry
-                   #    code drops rather than reaching a places facet as a
-                   #    place name. A bare code under any other authority
-                   #    still projects
-
-# A name entry also carries @usage (fixed="primary" in the schema, so a record
-# that sets it has said which name leads) and :alternative_names, the MODS 3.7
-# alternativeName composed with the ENCLOSING name's @type.
-
-doc.origin_agents  # => [{ name:, roles:, affiliation:, display_label:, href:,
-                   #      event_type: }, ...]
-                   #    originInfo/agent, new in MODS 3.8: who performed the
-                   #    event the block records
-
-# An originInfo child also carries its block's @eventType, and a place carries
-# the NAMES of the date elements beside it (:date_elements) -- "Creation place"
-# and "Publication place" are the same element under a different date, and the
-# place says nothing about the event itself. Each of the seven dates gains
-# <date>_display_label and <date>_event_type from the same block.
-
-# Every DISPLAYED projection carries the @displayLabel and xlink:href of the
-# element its header comes from, as { value:, display_label:, href: } -- or as
-# two extra keys where the entry already had a shape of its own. MODS puts the
-# pair on originInfo and physicalDescription rather than on the publisher,
-# place, extent or digitalOrigin inside them, so those children read it off
-# their parent. The two attribute sets overlap rather than match (26 elements
-# take @displayLabel, 14 take xlink:href); an element the schema gives neither
-# projects nil. The four fields that JOIN several elements into one string --
-# abstract and the three accessCondition fields -- take companion scalars
-# instead (doc.abstract_display_label, doc.abstract_href).
-
-# A BROWSABLE projection also carries the vocabulary its value was taken from,
-# as { authority:, authority_uri:, value_uri: } -- names (and originInfo
-# agents), languages, genres and subject headings. A consumer asking "may this
-# value be offered as a browse?" asks for any of the three: MODS lets a record
-# declare its vocabulary by URI alone, so requiring @authority would call an
-# authorityURI-bearing corporate name uncontrolled.
-#
-# This resolves DIFFERENTLY from the pair above, which is why it is a separate
-# port rather than three more keys on qualifiers_of. A header often comes from
-# a PARENT; an authority never does. It is read off the element holding the
-# value, then off an enclosing <subject> -- a pre-coordinated heading declares
-# its vocabulary once, on the heading. A <role>/<roleTerm> authority is never
-# consulted: it is the vocabulary of the RELATOR, and the deposit form writes a
-# marcrelator roleTerm on every creator it collects.
-doc.host_collections
-                   # => [{ title:, volume:, issue:, start_page:, end_page:,
-                   #      date:, text:, details: [...], extents: [...] }, ...]
-                   #    this work's position in its host. The entry survives on
-                   #    its part alone, so a host with no titleInfo is kept
-doc.identifiers    # => [{ type: "isbn", value: "...", invalid: false,
-                   #      display_label:, href: }, ...]
-                   #    @invalid means cancelled or superseded, so it travels
-doc.table_of_contents
-                   # => [{ value: "Ch 1\nCh 2", ... }]
-                   #    line breaks kept: in a contents list
-                   #    the break is the structure, not stray formatting
-doc.notes          # => [{ type: "funding", value: "...", display_label:, href: }, ...]
-doc.related_items  # => [{ type: "otherFormat", title: "...",
-                   #      display_label:, href: }, ...]
-                   #    every relatedItem that is not a series or a host
-doc.location       # => [{ physical_location:, shelf_location:, url:,
-                   #      display_label:, href: }, ...]
-doc.map_data       # => [{ scale:, projection:, coordinates: }, ...]
-doc.title_subjects # => ["The Great Gatsby"]   composed like the main title
+doc.names          # => [{ name: "Cohen, Daniel J.(Daniel Jared), 1968-", roles: ["Creator"], ... }]
 doc.subject_headings
-                   # => [{ parts: ["Salt marshes", "Massachusetts"],
-                   #      heading: "Salt marshes -- Massachusetts",
-                   #      axis: "topic", authority: "lcsh", authority_uri:,
-                   #      value_uri:, display_label:, href: }, ...]
-                   #    one top-level <subject> as ONE heading. :heading is the
-                   #    parts joined, here rather than with the caller because
-                   #    it is both the string a display renders and the string
-                   #    a browse index holds -- two joins is how those drift.
-                   #    :axis names the element of the heading's MAIN term
-                   #    (its first child carrying heading text), which is what
-                   #    says which browse the heading belongs to: a place
-                   #    subdivision does not make a topic heading a place.
-                   #    A <name> axis splits by @type: "personal_name" or
-                   #    "corporate_name"
-doc.hierarchical_geographic_subjects
-                   # => [{ country:, state:, city:, ... }, ...]   eleven levels,
-                   #    structured for the reason map_data is
-doc.record_info    # => { content_source:, origin:, description_standard:,
-                   #      creation_date:, change_date:, language_of_cataloging: }
-                   #    describes the CATALOGUING, not the resource
-doc.to_h           # => full projection, keyed to Atlas's Metadata::MODS attributes
+                   # => [{ parts: [...], heading: "Salt marshes -- Massachusetts",
+                   #      axis: "topic", authority: "lcsh", ... }]
+doc.date_issued    # => a DateTime or nil, beside date_issued_precision, _end, ...
 
-# The field registry -- the single declaration of what this gem projects.
-# name => :one or :many. to_h is derived from it, and a consumer builds its own
-# schema from it rather than re-listing the field set by hand. Cardinality
-# follows what MODS marks repeatable, so a field can never silently truncate.
+# The field registry: field name => :one or :many
 NEU::MODS::FIELDS  # => { main_title: :one, names: :many, ... }
 
-# Pure title composition (no document needed) — for callers that already hold
-# the parts (e.g. Atlas's access-copy model) and must not re-parse XML on read.
-NEU::MODS.compose_title(non_sort: "", title: "What's New",
-                        part_name: "How We Respond to Disaster", part_number: "Episode 1")
-# => "What's New. How We Respond to Disaster. Episode 1"   (== doc.plain_title)
-# The part NUMBER precedes the part NAME: "Part 2. The Marshes" is the
-# cataloguing convention, and titleInfo is an unordered choice in the schema.
+# Title composition over parts a caller already holds, with no XML
+NEU::MODS.compose_title(title: "What's New", part_name: "How We Respond to Disaster",
+                        part_number: "Episode 1")
+# => "What's New. How We Respond to Disaster. Episode 1"
 
-# Selectors (live nodes — for editing)
+# Selectors: live nodes, for editing
 node = doc.primary_title_info.at_xpath("mods:title", NEU::MODS::NAMESPACE)
 node.content = "New Title" unless NEU::MODS.whitespace_equivalent?(node.text, "New Title")
-doc.to_xml
 
-# Editable creators (for an "advanced metadata" form): structured read,
-# node selection (for replace-on-save), and structure-aware build.
-doc.editable_personal_creators   # => [{ given:, family: }]  (plain, Creator role)
-doc.editable_corporate_creators  # => [{ name: }]
-doc.preserved_names              # => [{ name:, roles: }]  (authority-bearing / non-Creator — read-only)
-doc.editable_creator_nodes("personal")            # => live <name> nodes to replace
-doc.build_personal_name(given: "Jenny", family: "Smith")      # => a plain personal <name> node
-doc.build_corporate_name(name: "Northeastern University")     # => a plain corporate <name> node
+# Builders: new nodes in the document's MODS namespace
+doc.doc.root.add_child(doc.build_corporate_name(name: "Northeastern University"))
+doc.to_xml
 ```
 
-The "editable creator" set is plain names — **no `@authority`/`@authorityURI`/
-`@valueURI`** — with a **Creator** role; everything else (authority-controlled or
-other-role names) is `preserved_names`, shown read-only. This mirrors the
-keyword-subject curated-vs-editable split. `build_*_name`'s `role:` defaults to
-`"Creator"` but is parameterised, so a later role-selectable form is non-breaking.
+What each field holds, and why, is documented per MODS area in
+[`docs/`](docs/README.md). Start with [`docs/fields.md`](docs/fields.md).
 
-## Two normalizers, two jobs
+## Behavior fidelity and known caveats
 
-- `NEU::MODS.whitespace_equivalent?` / `.canonical_ws` — the **no-op guard**: did an
-  edit change anything, or only insignificant whitespace? (Used to avoid minting
-  an unchanged OCFL MODS version.)
-- `NEU::MODS.normalize_paragraphs` / `.normalize` — clean **curator freetext** for
-  the JSON/Solr access copy (dash/smart-punctuation transliteration, control
-  stripping, paragraph handling). The XML preservation copy is never touched.
+The projection preserves the output of Atlas's earlier `mods`-gem-based
+extraction. `spec/conformance_spec.rb` pins it against `work-mods.xml`, so a
+change to what the gem projects is a deliberate contract change.
 
-Titles and prose share the one freetext vocabulary: `to_h[:main_title]` is
-normalized like `abstract`, so an invisible format mark, a Windows-1252 control
-or an exotic space cannot reach Solr or a display template.
-
-**The boundary matters.** Normalization belongs on projections that only feed
-display and the index. `title_parts` is deliberately *not* normalized, because
-Cerberus pre-fills its Metadata and Advanced forms from it and `MODSMerge` writes
-the posted value back into the MODS XML — cleaning there would rewrite the
-curator's own characters in the preservation copy on the next save. Cerberus
-makes the same call for prose: its editable source is the bare `<abstract>` node,
-not `doc.abstract`. Add a normalized *sibling* rather than normalizing a
-projection an edit form reads.
-
-## Behavior fidelity & known caveats
-
-The projection is **behavior-preserving** with Atlas's prior `mods`-gem-based
-extraction, pinned by `spec/conformance_spec.rb` against `work-mods.xml`. Two
-intentional notes:
-
-- **Name display** reproduces the `mods` gem's `display_value_w_date` *including
-  its quirks* (e.g. multiple `given` nameParts concatenate with no separator),
-  to preserve existing Solr/display output. Cleanups are a deliberate future
-  contract change, not a silent one.
-- **Languages are translated; roles are not.** Both read the `type="text"` term
-  first. A code-only `languageTerm` is then translated through the vendored ISO
-  639 registry (`lib/neu/mods/data/iso639-2.txt`, from the Library of Congress),
-  so `eng` projects `English`. That happens here rather than in a consumer's
-  display layer because otherwise Solr indexes `eng` while the page shows
-  `English`, and the language facet reads in codes.
-  A code-only `roleTerm` stays raw. A MARC relator is a display *label*, and the
-  label vocabulary belongs to the consumer — Cerberus's edit form and Atlas's
-  display word the same role differently. An unrecognised language code also
-  stays raw, since the record still said something.
-- **`description` is not projected.** MODS does define `name/description`, but
-  that annotates a *name*, not the resource, so it is not the field Atlas once
-  called `description`. The two candidates for that one — an `abstract` variant
-  and `physicalDescription/note` — describe different things. Projecting a guess
-  would put wrong data in the field rather than leave an empty one, so it waits
-  on a decision.
-- **A date carries more than a value.** Each of `dateCreated`, `dateIssued` and
-  `copyrightDate` projects a value, its precision, an end value with its own
-  precision, the `@qualifier` and the `@keyDate` flag. The gem does not *pick*
-  the key date, because "which date to sort on" and "which date to display" are
-  not necessarily the same answer, and choosing is the consumer's job.
-
-## Source convention
-
-Every character-class regex in `TextNormalizer` is built **programmatically from
-codepoints**, so the source stays pure ASCII (no literal smart-quotes/dashes, no
-raw control bytes). A spec enforces this. Keep it that way.
+- **Name display reproduces the `mods` gem's `display_value_w_date`, quirks
+  included.** For example, two `given` name parts join with no separator. This
+  preserves Atlas's Solr and display output. A cleanup would be a contract
+  change. See [`docs/names.md`](docs/names.md).
+- **Languages are translated; roles are not.** A code-only `languageTerm` is
+  read through the vendored ISO 639 registry, so `eng` projects "English", and
+  Solr and the page agree. A code-only `roleTerm` stays raw, because a MARC
+  relator is a display label and each consumer words it differently. An
+  unrecognised language code also stays raw.
+- **`description` is not projected.** MODS `name/description` annotates a name,
+  not the resource. The two candidates for a resource description, an
+  `abstract` variant and `physicalDescription/note`, describe different things.
+  A guess would put wrong data in the field, so it waits on a decision.
+- **A date carries more than a value.** Each of the seven `originInfo` date
+  elements projects its value, precision, range end, qualifier, key-date flag,
+  literal text and block header. The gem does not choose which date to sort on
+  or display; that is the consumer's call. See [`docs/dates.md`](docs/dates.md).
 
 ## Development
 
-```bash
+```sh
 bundle install
-bundle exec rspec
-bundle exec rubocop
+bundle exec rake    # specs, then rubocop
 ```
 
-Versioned via the `.version` file (read by `lib/neu/mods/version.rb`); released
-with `bundler/gem_tasks` (`rake release`), mirroring `atlas_rb`.
+The version lives in `.version`, which `lib/neu/mods/version.rb` reads. Release
+with `bundler/gem_tasks` (`rake release`).

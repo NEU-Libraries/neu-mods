@@ -18,6 +18,7 @@ back, so you can find either from the other. The pages mirror the mixins under
 
 | Page | Covers |
 |---|---|
+| [`fields.md`](fields.md) | The `FIELDS` registry, cardinality, the empty values, and adding a field |
 | [`qualifiers-and-authority.md`](qualifiers-and-authority.md) | The display-label and href pair, the authority triple, and why they resolve differently |
 | [`titles.md`](titles.md) | Primary-title selection, the faithful and the access parts, `compose_title` and the nonSort binding |
 | [`names.md`](names.md) | The `display_value_w_date` port and its quirks, roles, and editable against preserved names |
@@ -26,7 +27,6 @@ back, so you can find either from the other. The pages mirror the mixins under
 | [`other-fields.md`](other-fields.md) | Origin info, physical description, access conditions, related items, identifiers and languages |
 | [`editing.md`](editing.md) | The write path: shared selectors, the builders, and what `MODSMerge` relies on |
 | [`text-normalization.md`](text-normalization.md) | The two cleaners, the ASCII source rule, and the two definitions of whitespace |
-| [`fields.md`](fields.md) | The `FIELDS` registry, cardinality, the empty values, and adding a field |
 
 ## What belongs elsewhere
 

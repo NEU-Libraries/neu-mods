@@ -34,6 +34,13 @@ RSpec.describe "NEU::MODS::Projection::FIELDS" do
     expect(registry.keys.reject { |f| doc.respond_to?(f) }).to be_empty
   end
 
+  # DATE_ELEMENTS keeps its own order, the one a place header reads, so it is
+  # a second list of the same seven elements rather than DATE_FIELDS.values.
+  it "generates date fields for exactly the elements a place reads" do
+    dates = NEU::MODS::Projection::Dates
+    expect(dates::DATE_FIELDS.values).to match_array(dates::DATE_ELEMENTS)
+  end
+
   it "derives to_h from the registry, in registry order" do
     expect(doc.to_h.keys).to eq(registry.keys)
   end

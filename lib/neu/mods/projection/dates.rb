@@ -36,11 +36,39 @@ module NEU
         # write "iso8601" and "ISO-8601" alike.
         ISO8601_ENCODING = "iso8601"
 
+        # Field prefix => the MODS element it reads, in FIELDS order. Written out
+        # rather than derived, so a search for a field name lands here.
+        DATE_FIELDS = {
+          date_created: "dateCreated",
+          date_issued: "dateIssued",
+          copyright_date: "copyrightDate",
+          date_captured: "dateCaptured",
+          date_valid: "dateValid",
+          date_other: "dateOther",
+          date_modified: "dateModified"
+        }.freeze
+
+        # Field suffix => the key of the #date_parts entry it reads. Each element
+        # projects one field per row.
+        DATE_KEYS = {
+          "" => :value,
+          "_precision" => :precision,
+          "_end" => :end_value,
+          "_end_precision" => :end_precision,
+          "_qualifier" => :qualifier,
+          "_key_date" => :key_date,
+          "_text" => :text,
+          "_display_label" => :display_label,
+          "_event_type" => :event_type
+        }.freeze
+
         # What #date_parts returns when the element is absent entirely, so an
         # absent date is distinguishable from one present and unparseable.
-        EMPTY_DATE = { value: nil, precision: nil, end_value: nil, end_precision: nil,
-                       qualifier: nil, key_date: nil, text: nil,
-                       display_label: nil, event_type: nil }.freeze
+        EMPTY_DATE = DATE_KEYS.values.to_h { |key| [key, nil] }.freeze
+
+        # The FIELDS rows for the generated fields, each element's rows together.
+        DATE_FIELD_ROWS = DATE_FIELDS.keys.product(DATE_KEYS.keys)
+                                     .to_h { |field, suffix| [:"#{field}#{suffix}", :one] }.freeze
 
         # MODS puts seven date elements under originInfo and this reads all of
         # them. dateCaptured is when the object was digitised and dateModified is
@@ -55,83 +83,17 @@ module NEU
         DATE_ELEMENTS = %w[dateIssued dateCreated copyrightDate dateCaptured
                            dateValid dateOther dateModified].freeze
 
-        def date_created_parts = date_parts("dateCreated")
-        def date_issued_parts = date_parts("dateIssued")
-        def copyright_date_parts = date_parts("copyrightDate")
-        def date_captured_parts = date_parts("dateCaptured")
-        def date_valid_parts = date_parts("dateValid")
-        def date_other_parts = date_parts("dateOther")
-        def date_modified_parts = date_parts("dateModified")
-
-        def date_created = date_created_parts[:value]
-        def date_created_precision = date_created_parts[:precision]
-        def date_created_end = date_created_parts[:end_value]
-        def date_created_end_precision = date_created_parts[:end_precision]
-        def date_created_qualifier = date_created_parts[:qualifier]
-        def date_created_key_date = date_created_parts[:key_date]
-        def date_created_text = date_created_parts[:text]
-        def date_created_display_label = date_created_parts[:display_label]
-        def date_created_event_type = date_created_parts[:event_type]
-
-        def date_issued = date_issued_parts[:value]
-        def date_issued_precision = date_issued_parts[:precision]
-        def date_issued_end = date_issued_parts[:end_value]
-        def date_issued_end_precision = date_issued_parts[:end_precision]
-        def date_issued_qualifier = date_issued_parts[:qualifier]
-        def date_issued_key_date = date_issued_parts[:key_date]
-        def date_issued_text = date_issued_parts[:text]
-        def date_issued_display_label = date_issued_parts[:display_label]
-        def date_issued_event_type = date_issued_parts[:event_type]
-
-        def copyright_date = copyright_date_parts[:value]
-        def copyright_date_precision = copyright_date_parts[:precision]
-        def copyright_date_end = copyright_date_parts[:end_value]
-        def copyright_date_end_precision = copyright_date_parts[:end_precision]
-        def copyright_date_qualifier = copyright_date_parts[:qualifier]
-        def copyright_date_key_date = copyright_date_parts[:key_date]
-        def copyright_date_text = copyright_date_parts[:text]
-        def copyright_date_display_label = copyright_date_parts[:display_label]
-        def copyright_date_event_type = copyright_date_parts[:event_type]
-
-        def date_captured = date_captured_parts[:value]
-        def date_captured_precision = date_captured_parts[:precision]
-        def date_captured_end = date_captured_parts[:end_value]
-        def date_captured_end_precision = date_captured_parts[:end_precision]
-        def date_captured_qualifier = date_captured_parts[:qualifier]
-        def date_captured_key_date = date_captured_parts[:key_date]
-        def date_captured_text = date_captured_parts[:text]
-        def date_captured_display_label = date_captured_parts[:display_label]
-        def date_captured_event_type = date_captured_parts[:event_type]
-
-        def date_valid = date_valid_parts[:value]
-        def date_valid_precision = date_valid_parts[:precision]
-        def date_valid_end = date_valid_parts[:end_value]
-        def date_valid_end_precision = date_valid_parts[:end_precision]
-        def date_valid_qualifier = date_valid_parts[:qualifier]
-        def date_valid_key_date = date_valid_parts[:key_date]
-        def date_valid_text = date_valid_parts[:text]
-        def date_valid_display_label = date_valid_parts[:display_label]
-        def date_valid_event_type = date_valid_parts[:event_type]
-
-        def date_other = date_other_parts[:value]
-        def date_other_precision = date_other_parts[:precision]
-        def date_other_end = date_other_parts[:end_value]
-        def date_other_end_precision = date_other_parts[:end_precision]
-        def date_other_qualifier = date_other_parts[:qualifier]
-        def date_other_key_date = date_other_parts[:key_date]
-        def date_other_text = date_other_parts[:text]
-        def date_other_display_label = date_other_parts[:display_label]
-        def date_other_event_type = date_other_parts[:event_type]
-
-        def date_modified = date_modified_parts[:value]
-        def date_modified_precision = date_modified_parts[:precision]
-        def date_modified_end = date_modified_parts[:end_value]
-        def date_modified_end_precision = date_modified_parts[:end_precision]
-        def date_modified_qualifier = date_modified_parts[:qualifier]
-        def date_modified_key_date = date_modified_parts[:key_date]
-        def date_modified_text = date_modified_parts[:text]
-        def date_modified_display_label = date_modified_parts[:display_label]
-        def date_modified_event_type = date_modified_parts[:event_type]
+        # A *_parts method per element, and an accessor per DATE_FIELDS and
+        # DATE_KEYS pair: date_issued, date_issued_end, date_created_text and so
+        # on. They are generated, so a search for `def date_issued_end` finds
+        # nothing; search DATE_FIELDS for the prefix and DATE_KEYS for the suffix.
+        # The fields spec checks every FIELDS row against a method of its name.
+        DATE_FIELDS.each do |field, element|
+          define_method(:"#{field}_parts") { date_parts(element) }
+          DATE_KEYS.each do |suffix, key|
+            define_method(:"#{field}#{suffix}") { date_parts(element)[key] }
+          end
+        end
 
         # The [value, precision] pair the precision work introduced. Retained
         # because it is the documented entry point for a caller that wants both

@@ -19,8 +19,7 @@ module NEU
         def attr_value(node, name)
           return nil unless node
 
-          value = Canonicalize.canonical_ws(node[name].to_s)
-          value.empty? ? nil : value
+          clean(node[name])
         end
 
         # The two attributes a display reads off an element rather than out of its
@@ -161,13 +160,7 @@ module NEU
         end
 
         def child_text(parent, xpath)
-          return nil unless parent
-
-          node = parent.at_xpath(xpath, NAMESPACE)
-          return nil unless node
-
-          v = Canonicalize.canonical_ws(node.text)
-          v.empty? ? nil : v
+          clean(parent&.at_xpath(xpath, NAMESPACE)&.text)
         end
 
         # canonical_ws, but nil for blank (used where an absent member must drop out).

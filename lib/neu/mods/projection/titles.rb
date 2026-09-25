@@ -142,8 +142,7 @@ module NEU
         # mark cannot reach Solr or a display template through this route either.
         def variant_titles(type)
           doc.xpath("/mods:mods/mods:titleInfo[@type='#{type}']", NAMESPACE).filter_map do |node|
-            parts = title_parts_of(node).transform_values { |value| TextNormalizer.normalize(value.to_s) }
-            value = clean(Titles.compose_title(parts))
+            value = composed_title_of(node)
             labeled(value, node) if value
           end
         end

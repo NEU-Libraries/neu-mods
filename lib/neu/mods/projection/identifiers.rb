@@ -37,8 +37,7 @@ module NEU
         end
 
         def permanent_url
-          node = doc.at_xpath("/mods:mods/mods:identifier[@type='hdl']", NAMESPACE)
-          node && clean(node.text)
+          clean(handle_node&.text)
         end
 
         # The handle identifier carries @displayLabel="Permanent URL" in Atlas's
@@ -46,7 +45,7 @@ module NEU
         # rather than one a decorator invents. No href companion: the value is the
         # URL.
         def permanent_url_display_label
-          attr_value(doc.at_xpath("/mods:mods/mods:identifier[@type='hdl']", NAMESPACE), "displayLabel")
+          attr_value(handle_node, "displayLabel")
         end
 
         # location repeats, and one location mixes kinds: a shelf mark and a URL
@@ -90,6 +89,14 @@ module NEU
 
           entry = RECORD_INFO_PARTS.transform_values { |xpath| child_text(node, xpath) }
           entry if entry.values.any?
+        end
+
+        private
+
+        # The handle identifier, which both the permanent URL and its header
+        # are read from.
+        def handle_node
+          doc.at_xpath("/mods:mods/mods:identifier[@type='hdl']", NAMESPACE)
         end
       end
     end

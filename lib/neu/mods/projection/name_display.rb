@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative "../namespaces"
-require_relative "../canonicalize"
 require_relative "support"
 
 module NEU
@@ -83,7 +82,7 @@ module NEU
         # has to arrive without the insignificant whitespace an XML document is
         # free to carry around element content.
         def part_text(node)
-          node ? Canonicalize.canonical_ws(node.text) : ""
+          clean_part(node&.text)
         end
 
         def name_roles(node)

@@ -111,9 +111,12 @@ module NEU
 
       # A name is "editable" (depositor-managed) when it carries no authority
       # markers and resolves to a Creator role. Shared by editable_creator_nodes
-      # (write/select) and the editable_*_creators projections (read).
+      # (write/select) and the editable_*_creators projections (read). The
+      # markers are read the way #authority_of reads them, so a blank attribute
+      # counts as absent in both and a name the projection calls uncontrolled
+      # is one the form can edit.
       def editable_creator_name?(node)
-        %w[authority authorityURI valueURI].none? { |attr| node[attr] } &&
+        Projection::AUTHORITY_ATTRIBUTES.values.none? { |attr| attr_value(node, attr) } &&
           name_role(node) == "Creator"
       end
 

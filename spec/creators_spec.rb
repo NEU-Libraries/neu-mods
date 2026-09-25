@@ -140,4 +140,27 @@ RSpec.describe "Creator read / select / build" do
       expect { doc.build_node("name") }.to raise_error(ArgumentError, /MODS namespace/)
     end
   end
+
+  # A blank authority attribute is no authority: #authority_of canonicalizes it
+  # to nil, so the edit form has to treat the name as plain too, or the name is
+  # reported uncontrolled and still cannot be edited.
+  describe "a name carrying a blank authority attribute" do
+    let(:doc) do
+      NEU::MODS::Document.parse(<<~XML)
+        <?xml version="1.0"?>
+        <mods:mods xmlns:mods="http://www.loc.gov/mods/v3">
+          <mods:name type="corporate" authority=" " valueURI=""><mods:namePart>Acme</mods:namePart>
+            <mods:role><mods:roleTerm type="text">Creator</mods:roleTerm></mods:role></mods:name>
+        </mods:mods>
+      XML
+    end
+
+    it "is editable, matching the projection's reading of it as uncontrolled" do
+      aggregate_failures do
+        expect(doc.names.first).to include(authority: nil, authority_uri: nil, value_uri: nil)
+        expect(doc.editable_corporate_creators).to eq([{ name: "Acme" }])
+        expect(doc.preserved_names).to eq([])
+      end
+    end
+  end
 end

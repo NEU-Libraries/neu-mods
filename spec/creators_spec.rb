@@ -96,4 +96,48 @@ RSpec.describe "Creator read / select / build" do
       expect(mixed.editable_corporate_creators).to eq([{ name: "Org" }])
     end
   end
+
+  # The builders find the MODS namespace by URI. A document is free to bind it
+  # to any prefix, and an element built outside it is invisible to the
+  # projection and to editable_creator_nodes, so every save would add a copy.
+  describe "building under any MODS namespace binding" do
+    def blank_with(root)
+      NEU::MODS::Document.parse(<<~XML)
+        <?xml version="1.0"?>
+        #{root}
+      XML
+    end
+
+    {
+      "the mods prefix" => '<mods:mods xmlns:mods="http://www.loc.gov/mods/v3"/>',
+      "the default namespace" => '<mods xmlns="http://www.loc.gov/mods/v3"/>',
+      "another prefix" => '<m:mods xmlns:m="http://www.loc.gov/mods/v3"/>'
+    }.each do |binding, root|
+      it "builds a creator the projection reads back under #{binding}" do
+        doc = blank_with(root)
+        doc.doc.root.add_child(doc.build_corporate_name(name: "Acme"))
+        reparsed = NEU::MODS::Document.parse(doc.to_xml)
+
+        aggregate_failures do
+          expect(reparsed.editable_corporate_creators).to eq([{ name: "Acme" }])
+          expect(reparsed.names.map { |n| n[:name] }).to eq(["Acme"])
+        end
+      end
+
+      it "replaces rather than duplicates the creator on a repeated save under #{binding}" do
+        doc = blank_with(root)
+        2.times do
+          doc.editable_creator_nodes("corporate").each(&:remove)
+          doc.doc.root.add_child(doc.build_corporate_name(name: "Acme"))
+        end
+
+        expect(doc.editable_creator_nodes("corporate").size).to eq(1)
+      end
+    end
+
+    it "raises rather than build an element outside MODS" do
+      doc = blank_with("<mods/>")
+      expect { doc.build_node("name") }.to raise_error(ArgumentError, /MODS namespace/)
+    end
+  end
 end

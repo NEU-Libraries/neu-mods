@@ -55,11 +55,14 @@ module NEU
         doc.xpath("/mods:mods/mods:subject", NAMESPACE).select { |s| keyword_subject?(s) }
       end
 
-      # Build a namespaced MODS element reusing the document's existing `mods:`
-      # namespace declaration (so new nodes never re-declare xmlns).
+      # Build a namespaced MODS element reusing the document's existing MODS
+      # namespace declaration (so new nodes never re-declare xmlns). Matched by
+      # URI rather than prefix: a document binds MODS to whatever prefix it
+      # likes, and an element built outside the namespace is invisible to every
+      # XPath here. A document declaring no MODS namespace raises instead.
       def build_node(name, text = nil)
         node = Nokogiri::XML::Node.new(name, doc)
-        node.namespace = doc.root.namespace_definitions.find { |d| d.prefix == "mods" }
+        node.namespace = mods_namespace_definition
         node.content = text unless text.nil?
         node
       end
@@ -112,6 +115,11 @@ module NEU
       def editable_creator_name?(node)
         %w[authority authorityURI valueURI].none? { |attr| node[attr] } &&
           name_role(node) == "Creator"
+      end
+
+      def mods_namespace_definition
+        doc.root.namespace_definitions.find { |d| d.href == NAMESPACE["mods"] } ||
+          raise(ArgumentError, "document declares no MODS namespace on its root element")
       end
 
       def name_part(text, type = nil)

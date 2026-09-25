@@ -15,19 +15,9 @@ require_relative "projection/identifiers"
 
 module NEU
   module MODS
-    # Node -> plain data. The read contract: what a MODS document *projects to* for
-    # indexing/display. Behavior-preserving with Atlas's prior `mods`-gem-based
-    # extraction (verified by the conformance corpus), reimplemented in Nokogiri so
-    # DRS depends on Nokogiri alone. Mixed into Document; operates on `doc`.
-    #
-    # Empty-value conventions mirror Atlas: scalar fields are "" when absent
-    # (matching `.text.squish` on an empty node set), except `permanent_url` and
-    # `date_created`, which are nil when their node is absent. Arrays are [].
-    # Which fields are scalar and which are arrays is declared in FIELDS, not
-    # left to each method to decide.
-    #
-    # Each MODS area is its own mixin under projection/. This module composes
-    # them and owns the FIELDS registry that #to_h is derived from.
+    # Node -> plain data: what a MODS document projects to for indexing and
+    # display. Each MODS area is its own mixin under projection/; this module
+    # composes them and owns FIELDS. See docs/fields.md.
     module Projection
       include Support
       include NameDisplay
@@ -42,18 +32,9 @@ module NEU
       include RelatedItems
       include Identifiers
 
-      # The field registry: the single declaration of what this gem projects.
-      # Field name => cardinality, :one or :many. The projection method of the
-      # same name owns the XPath; this row says the field exists and whether it
-      # is single- or multi-valued. #to_h is derived from it, and Atlas derives
-      # its Metadata::MODS attr_json set from it, so a field cannot be projected
-      # here and go undeclared there (or the reverse).
-      #
-      # Cardinality is the half that earns its keep. The at_xpath-versus-xpath
-      # choice here and the single-versus-array column choice in Atlas used to be
-      # made independently in two repos with nothing tying them together, which is
-      # how repeatable MODS elements ended up truncated to their first match.
-      # #cardinality_of checks each method against its row.
+      # Field name => :one or :many. #to_h and Atlas's Metadata::MODS attribute
+      # set are both derived from it, so each key is a public method name that
+      # a consumer depends on. See docs/fields.md.
       FIELDS = {
         # titles
         main_title: :one,
@@ -76,10 +57,7 @@ module NEU
         edition: :many,
         issuance: :many,
         frequency: :many,
-        # Nine rows per originInfo date, for each of the seven MODS defines,
-        # generated from Dates::DATE_FIELDS and Dates::DATE_KEYS. Flat rather
-        # than one nested value, because the value half has consumers that need
-        # a real date object.
+        # Nine generated rows for each of the seven date elements (docs/dates.md).
         **Dates::DATE_FIELD_ROWS,
 
         # physical description
@@ -139,9 +117,8 @@ module NEU
         FIELDS.keys.to_h { |field| [field, public_send(field)] }
       end
 
-      # The cardinality a projected value actually has, for checking a value
-      # against its FIELDS row. An Array is :many and anything else is :one, so a
-      # field declared :many that forgot to switch at_xpath for xpath is caught.
+      # The cardinality a projected value has, for checking it against its FIELDS
+      # row: an Array is :many and anything else is :one.
       def self.cardinality_of(value) = value.is_a?(Array) ? :many : :one
 
       # The area mixins' module methods, callable on Projection too. A module

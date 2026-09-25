@@ -25,10 +25,9 @@ require_relative "neu/mods/document"
 # submodules.
 module NEU
   module MODS
-    # The projected field set and its cardinality (see Projection::FIELDS),
-    # surfaced here so a consumer deriving its own schema from it -- Atlas's
-    # Metadata::MODS attr_json set -- reads the shared contract off the top-level
-    # module instead of reaching into a mixin.
+    # The projected field set and its cardinality (docs/fields.md), on the
+    # top-level module so a consumer deriving its schema from it does not reach
+    # into a mixin.
     FIELDS = Projection::FIELDS
 
     module_function

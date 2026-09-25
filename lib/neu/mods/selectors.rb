@@ -3,8 +3,8 @@
 require "nokogiri"
 
 require_relative "namespaces"
-require_relative "canonicalize"
-require_relative "projection"
+require_relative "projection/support"
+require_relative "projection/name_display"
 
 module NEU
   module MODS
@@ -14,6 +14,9 @@ module NEU
     # definition is the point: the node an editor changes is provably the node the
     # projection reads. Mixed into Document; operates on `doc`.
     module Selectors
+      include Projection::Support
+      include Projection::NameDisplay
+
       # Top-level primary titleInfo, falling back to the first top-level titleInfo
       # that is NOT a variant. Scoped to direct children of <mods:mods> so a
       # relatedItem's nested titleInfo (e.g. a series title) is never matched.
@@ -44,7 +47,7 @@ module NEU
       # of any @type marks a variant, which also keeps an unrecognised or
       # misspelled value out of the write path rather than guessing at it.
       def variant_title?(node)
-        !Canonicalize.canonical_ws(node["type"].to_s).empty?
+        !attr_value(node, "type").nil?
       end
 
       # All top-level <abstract> elements (MODS permits several).
@@ -113,17 +116,6 @@ module NEU
 
         topics = subject.element_children
         topics.any? && topics.all? { |c| c.name == "topic" }
-      end
-
-      # A name is "editable" (depositor-managed) when it carries no authority
-      # markers and resolves to a Creator role. Shared by editable_creator_nodes
-      # (write/select) and the editable_*_creators projections (read). The
-      # markers are read the way #authority_of reads them, so a blank attribute
-      # counts as absent in both and a name the projection calls uncontrolled
-      # is one the form can edit.
-      def editable_creator_name?(node)
-        Projection::AUTHORITY_ATTRIBUTES.values.none? { |attr| attr_value(node, attr) } &&
-          name_role(node) == "Creator"
       end
 
       def mods_namespace_definition

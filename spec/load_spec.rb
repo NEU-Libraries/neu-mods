@@ -32,4 +32,21 @@ RSpec.describe "loading one file on its own" do
     output, status = run_ruby(lib, script)
     expect(status).to be_success, output
   end
+
+  # Selectors used to call a private Projection method, and Projection a
+  # private Selectors one, so neither worked without the other.
+  it "selects editable creators through Selectors without Projection" do
+    script = <<~RUBY
+      require "neu/mods/selectors"
+      holder = Struct.new(:doc) { include NEU::MODS::Selectors }
+      xml = <<~XML
+        <mods:mods xmlns:mods="http://www.loc.gov/mods/v3"><mods:name type="corporate">
+          <mods:namePart>Acme</mods:namePart><mods:role><mods:roleTerm type="text">Creator</mods:roleTerm></mods:role>
+        </mods:name></mods:mods>
+      XML
+      exit(holder.new(Nokogiri::XML(xml)).editable_creator_nodes("corporate").size == 1)
+    RUBY
+    output, status = run_ruby(lib, script)
+    expect(status).to be_success, output
+  end
 end

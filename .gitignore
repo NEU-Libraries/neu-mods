@@ -2,9 +2,12 @@
 /.yardoc
 /_yardoc/
 /coverage/
+# YARD output. Not docs/, which holds the tracked developer pages.
 /doc/
 /pkg/
 /tmp/
 *.gem
 .rspec_status
 Gemfile.lock
+# Developer-local hooks and settings.
+/.claude

@@ -7,21 +7,14 @@ module NEU
   module MODS
     module Projection
       # Top-level relatedItem elements: the series, the host and this work's
-      # part within it, and every other relationship with its type.
+      # part within it, and every other relationship with its type. See docs/other-fields.md.
       module RelatedItems
         include Support
 
         def related_series = related_item_titles("series")
 
-        # The host's title plus THIS work's position within it. The host's own
-        # name, originInfo and identifier stay out: they belong to the other
-        # record, and a transcribed copy goes stale the moment that record is
-        # edited. A part is the exception, because a volume, issue and page range
-        # describe this article and no other record holds that fact.
-        #
-        # An entry survives on its part alone. Requiring a title discarded the
-        # one piece of the block that was ours along with the metadata that never
-        # was, and how to render a titleless host is the consumer's call.
+        # The host's title plus THIS work's part within it. Never copy the host's
+        # own metadata: it belongs to the other record and would go stale.
         def host_collections
           doc.xpath("/mods:mods/mods:relatedItem[@type='host']", NAMESPACE).filter_map do |node|
             entry = { title: child_text(node, "mods:titleInfo/mods:title"), **host_part(node) }
@@ -29,23 +22,13 @@ module NEU
           end
         end
 
-        # relatedItem @type values that already have a field of their own, so the
-        # catch-all below does not repeat them.
+        # Types with a field of their own, which #related_items skips.
         NAMED_RELATED_ITEM_TYPES = %w[series host].freeze
 
-        # The part detail types volume and issue already have named keys on a
-        # host entry, so #host_details does not repeat them -- the same split
-        # NAMED_RELATED_ITEM_TYPES makes for relatedItem. A caption is kept
-        # because it is the label a cataloguer wrote for the number ("chap."
-        # before "3"), which no consumer can reconstruct from an open @type.
+        # Detail types with a named key on a host entry, which #host_details skips.
         NAMED_HOST_DETAIL_TYPES = %w[volume issue].freeze
 
-        # Every other relatedItem, keeping its @type. MODS also defines
-        # constituent, otherFormat, original, preceding, succeeding, isReferencedBy
-        # and reviewOf, and a record carrying any of them projected nothing at all.
-        # The type rides along because "the print edition" and "reviewed in" are
-        # not the same relationship, and no consumer can recover which it holds
-        # from the title alone. An untyped relatedItem lands here with a nil type.
+        # Every other relatedItem with a title, keeping its @type (nil if untyped).
         def related_items
           doc.xpath("/mods:mods/mods:relatedItem", NAMESPACE).filter_map do |node|
             type = clean(node["type"])
@@ -62,18 +45,8 @@ module NEU
           labeled_texts_at("/mods:mods/mods:relatedItem[@type='#{type}']/mods:titleInfo/mods:title", from: "../..")
         end
 
-        # Kept in parts rather than composed into "24(3), pp. 210-218". The
-        # punctuation of a citation is display policy, the same call #map_data
-        # makes for cartographics. MODS leaves @unit optional, so a page extent
-        # without one is read rather than dropped.
-        #
-        # Volume, issue and the page range keep named keys because they are the
-        # citation and a consumer asks for them by name. Everything else the
-        # schema allows under part arrives structured, because detail/@type and
-        # extent/@unit are open strings -- a fixed key per type cannot cover a
-        # vocabulary the schema does not close. #date is the article's year within
-        # the host, which after the title is the most-cited element of a journal
-        # citation and was reaching no consumer at all.
+        # In parts, not composed: citation punctuation is display policy. A page
+        # extent may omit @unit.
         def host_part(node)
           part = node.at_xpath("mods:part", NAMESPACE)
           return {} if part.nil?
@@ -106,10 +79,7 @@ module NEU
           end
         end
 
-        # Every extent EXCEPT the page range, which start_page and end_page hold.
-        # A unit other than page -- the minutes of a recording, the columns of a
-        # newspaper -- means nothing without its unit, so the unit travels with
-        # the numbers rather than being flattened away.
+        # Every extent except the page range, each with its unit.
         def host_extents(part)
           part.xpath("mods:extent", NAMESPACE).filter_map do |node|
             unit = clean(node["unit"])

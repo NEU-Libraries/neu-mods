@@ -2,26 +2,12 @@
 
 module NEU
   module MODS
-    # Normalises curator-authored freetext on the way into the JSON access copy
-    # (and Solr); the XML preservation copy stays untouched. Ported from Atlas's
-    # TextNormalizer (which carries DRS v1 prior art) so the gem reproduces Atlas's
-    # projection byte-for-byte.
+    # Cleans curator text for the JSON access copy and Solr, byte for byte as
+    # Atlas's TextNormalizer does; the XML preservation copy is never touched.
+    # See docs/text-normalization.md for the pipeline.
     #
-    # IMPORTANT: every character-class regex is built *programmatically* from
-    # codepoint lists via `format('\\u%04X', cp)`, so this source file stays pure
-    # ASCII -- no literal smart-quotes, dashes, or (critically) raw control bytes
-    # land on disk. Keep it that way.
-    #
-    # Pipeline: force UTF-8 + scrub invalid bytes; NFC; map Unicode dashes to '-'
-    # (swung-dash to '~'); transliterate the General Punctuation block (smart
-    # quotes, ellipsis, etc.) to ASCII; map the separator controls to a newline
-    # and drop what is invisible (the soft hyphen, the rest of C0/C1, keeping
-    # tab/newline); collapse horizontal-whitespace runs to one space; for
-    # paragraph fields, collapse 2+ newlines to exactly two; strip.
-    #
-    #   .normalize(str)            -- single-line fields (newlines -> spaces)
-    #   .normalize_paragraphs(str) -- fields that may carry paragraph breaks
-    #                                 (abstract, accessCondition)
+    # Keep this file pure ASCII: build every character class from codepoints
+    # through char_class, never from a literal character.
     module TextNormalizer
       module_function
 
@@ -31,8 +17,7 @@ module NEU
         Regexp.new("[#{prefix}#{codepoints.map { |cp| format('\\u%04X', cp) }.join}]")
       end
 
-      # NOTE: U+2053 (swung dash) is intentionally excluded from dashes -- it is
-      # named "dash" but conventionally maps to ASCII '~', not '-' (V1 prior art).
+      # U+2053 (swung dash) is not listed: it maps to "~", as in v1.
       DASH_CODEPOINTS = [
         0x002D, 0x058A, 0x05BE, 0x1400, 0x1806,
         0x2010, 0x2011, 0x2012, 0x2013, 0x2014, 0x2015,
@@ -45,27 +30,17 @@ module NEU
 
       SWUNG_DASH_RE = char_class([0x2053]).freeze
 
-      # U+00AD is a hint about where a word may break, not a dash: it renders as
-      # nothing, and Solr discards it, so "co<00AD>operation" already matches a
-      # search for "cooperation". Mapping it to an ASCII hyphen instead would
-      # index "co" and "operation" as two tokens and lose the word, so it is
-      # dropped and kept out of DASH_CODEPOINTS.
+      # Dropped, not made a hyphen: a hyphen would split one word into two Solr
+      # tokens.
       SOFT_HYPHEN_RE = char_class([0x00AD]).freeze
 
-      # U+000B (vertical tab) and U+000C (form feed) separate words rather than
-      # meaning nothing: Word writes a manual line break as U+000B and a page
-      # break as U+000C. They map to a newline, because deleting one runs the
-      # words either side of it together -- normalize_paragraphs then reads that
-      # newline as the soft wrap the line break was, and normalize turns it into
-      # a space.
+      # Word's manual line break and page break. They become a newline, because
+      # deleting one runs the words on either side together.
       SEPARATOR_CONTROL_CODEPOINTS = [0x000B, 0x000C].freeze
       SEPARATOR_CONTROL_RE = char_class(SEPARATOR_CONTROL_CODEPOINTS).freeze
 
-      # C0 (U+0000..U+0008, U+000D..U+001F) and C1 (U+007F..U+009F) -- what is
-      # left once the separators above are accounted for, and none of it carries
-      # meaning in curator text. U+0009 (tab) and U+000A (newline) are preserved.
-      # U+000D is not: dropping it reduces a CRLF line ending to the single
-      # newline it stands for.
+      # The rest of C0 and C1, keeping tab and newline. Dropping U+000D reduces
+      # CRLF to one newline.
       CONTROL_CODEPOINTS = ((0x0000..0x0008).to_a + (0x000D..0x001F).to_a + (0x007F..0x009F).to_a).freeze
       CONTROL_RE = char_class(CONTROL_CODEPOINTS).freeze
 
@@ -80,9 +55,8 @@ module NEU
 
       PARAGRAPH_RUN_RE = /\n{2,}/
 
-      # General Punctuation block (U+2000..U+206F). Codepoints not listed pass
-      # through unchanged. Empty-string values deliberately drop invisible/bidi/
-      # format marks so they cannot leak into the access copy.
+      # U+2000..U+206F. Unlisted codepoints pass through; "" drops an invisible
+      # or format mark.
       GENERAL_PUNCTUATION = {
         0x2000 => " ", 0x2001 => " ", 0x2002 => " ", 0x2003 => " ",
         0x2004 => " ", 0x2005 => " ", 0x2006 => " ", 0x2007 => " ",

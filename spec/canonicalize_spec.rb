@@ -94,6 +94,13 @@ RSpec.describe NEU::MODS::TextNormalizer do
       expect(NEU::MODS.normalize("1900#{en_dash}1910")).to eq("1900-1910")
     end
   end
+
+  it "exposes the two entry points and not the shared pipeline stage" do
+    aggregate_failures do
+      expect(described_class).to respond_to(:normalize, :normalize_paragraphs)
+      expect(described_class).not_to respond_to(:base_normalize)
+    end
+  end
 end
 
 # Regression guard: the TextNormalizer port must stay pure ASCII on disk (no

@@ -16,14 +16,6 @@ Layout/LineLength:
 Style/Documentation:
   Enabled: false
 
-# The projection layer is a flat list of small, single-purpose extraction
-# methods; per-method these are simple, so the aggregate-class metrics are noise.
-Metrics/ClassLength:
-  Enabled: false
-
-Metrics/ModuleLength:
-  Enabled: false
-
 # Spec files describe-block nesting + fixtures.
 Metrics/BlockLength:
   Exclude:
@@ -53,7 +45,7 @@ Style/FormatStringToken:
 Naming/MethodParameterName:
   AllowedNames: [dv, np]
 
-# A few methods (date_entry, host_part, host_details, host_extents) each build
-# one literal hash, one key per line: data, not logic.
+# A method that builds one literal hash, one key per line, is data rather than
+# logic, so the hash counts as one line.
 Metrics/MethodLength:
-  Max: 20
+  CountAsOne: ["hash"]

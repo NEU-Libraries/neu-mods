@@ -22,9 +22,7 @@ module NEU
         # take the label off their parent. `from: ".."` says which element the
         # header comes from; the value still comes from the element itself.
         def format = labeled_texts_at("/mods:mods/mods:physicalDescription/mods:form", from: "..")
-
         def extent = labeled_texts_at("/mods:mods/mods:physicalDescription/mods:extent", from: "..")
-
         def digital_origin = labeled_texts_at("/mods:mods/mods:physicalDescription/mods:digitalOrigin", from: "..")
 
         # A genre is a browse axis, so its entry carries the vocabulary the term

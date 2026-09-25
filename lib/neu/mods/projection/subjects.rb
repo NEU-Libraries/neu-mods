@@ -81,14 +81,12 @@ module NEU
         # from the IPTC City and State fields, so this one was also being written
         # on every batch and read back by nothing.
         def geographic_subjects = texts_at("/mods:mods/mods:subject/mods:geographic")
-
         def temporal_subjects = texts_at("/mods:mods/mods:subject/mods:temporal")
 
         # Name subjects compose through the same display-value port as #names, so
         # one person reads the same whether they authored the work or are its
         # subject.
         def personal_name_subjects = name_subjects("personal")
-
         def corporate_name_subjects = name_subjects("corporate")
 
         # The last unprojected member of a closed set: every other subject child

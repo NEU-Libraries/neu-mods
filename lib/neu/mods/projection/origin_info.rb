@@ -23,7 +23,6 @@ module NEU
         # place, edition, issuance or frequency inside it, so each of these takes
         # its header off the parent block.
         def publication_information = origin_texts_at("mods:publisher")
-
         def edition = origin_texts_at("mods:edition")
 
         # Prefer the type="text" term per place, falling back to a coded one --

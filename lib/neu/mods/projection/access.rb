@@ -23,7 +23,6 @@ module NEU
         # element into one value and three consumers -- the OAI dc:description,
         # the citation and description_tsim -- hold that value as a string.
         def abstract_display_label = first_attr(abstract_nodes, "displayLabel")
-
         def abstract_href = first_href(abstract_nodes)
 
         # Every top-level accessCondition joined, regardless of @type. Retained
@@ -39,14 +38,12 @@ module NEU
         # which is the one defect in this area that misinforms someone about their
         # rights rather than merely hiding a field.
         def use_and_reproduction = access_conditions_of_type("use and reproduction")
-
         def restriction_on_access = access_conditions_of_type("restriction on access")
 
         # Companion scalars for the same reason the abstract's are: each of the
         # three fields joins several elements into one value, and a licence URI
         # belongs beside the licence text a reader is given.
         def access_condition_display_label = first_attr(access_condition_nodes, "displayLabel")
-
         def access_condition_href = first_href(access_condition_nodes)
 
         def use_and_reproduction_display_label

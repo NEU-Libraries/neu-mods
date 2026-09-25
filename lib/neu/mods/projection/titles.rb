@@ -32,11 +32,8 @@ module NEU
         # variant from hiding anything: the variant still reaches a reader, under
         # a label that says which kind of title it is.
         def alternative_title = variant_titles("alternative")
-
         def uniform_title = variant_titles("uniform")
-
         def translated_title = variant_titles("translated")
-
         def abbreviated_title = variant_titles("abbreviated")
 
         # Composed display title (the former Atlas MODSDecoration#plain_title), driven
